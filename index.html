@@ -770,7 +770,7 @@
     const urlId = urlParams.get('id');
     if (urlId) {
       document.getElementById('asset-id-input').value = urlId;
-      window.lookupAsset();
+      setTimeout(() => window.lookupAsset(), 100);
     }
   </script>
 

@@ -249,6 +249,19 @@
 
     .action-link:hover { text-decoration: underline; }
 
+    .btn-inline-return {
+      padding: 5px 12px;
+      background: #d1e7dd;
+      color: #0a5c36;
+      border: 1.5px solid #75b798;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn-inline-return:hover { opacity: 0.8; }
+
     @media (max-width: 600px) {
       td.desc-cell, th:nth-child(3) { display: none; }
     }
@@ -325,7 +338,7 @@
   <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, collection, getDocs }
+    import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, serverTimestamp }
       from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -445,13 +458,17 @@
           ? '<span style="background:#fff3cd;color:#856404;padding:3px 10px;border-radius:12px;font-size:0.78rem;font-weight:600;">🚗 Off-Site</span>'
           : '<span style="background:#d1e7dd;color:#0a5c36;padding:3px 10px;border-radius:12px;font-size:0.78rem;font-weight:600;">📍 On-Site</span>';
 
+        const actionCell = asset.status === 'out' && asset.currentBookingId
+          ? `<button class="btn-inline-return" onclick="returnAssetFromAdmin('${asset._id}', '${asset.currentBookingId}', this)">📥 Return</button>`
+          : `<a class="action-link" href="index.html?id=${asset._id}">View →</a>`;
+
         html += `<tr>
           <td class="asset-id-cell">${asset._id}</td>
           <td>${asset.location || '—'}</td>
           <td class="desc-cell">${asset.description || '—'}</td>
           <td>${statusHtml}</td>
           <td class="date-cell">${updatedAt}</td>
-          <td><a class="action-link" href="index.html?id=${asset._id}">View →</a></td>
+          <td>${actionCell}</td>
         </tr>`;
       });
 
@@ -493,6 +510,33 @@
       a.download = `assets-${new Date().toISOString().slice(0,10)}.csv`;
       a.click();
       URL.revokeObjectURL(url);
+    };
+
+    window.returnAssetFromAdmin = async function (assetId, bookingId, btn) {
+      if (!confirm(`Mark asset ${assetId} as returned?`)) return;
+      btn.textContent = '⏳ Saving…';
+      btn.disabled = true;
+      try {
+        await updateDoc(doc(db, 'bookings', bookingId), {
+          returnedAt: serverTimestamp()
+        });
+        await updateDoc(doc(db, 'assets', assetId), {
+          status: 'in',
+          currentBookingId: null,
+          updatedAt: serverTimestamp()
+        });
+        // Update in-memory and re-render
+        const asset = allAssets.find(a => a._id === assetId);
+        if (asset) { asset.status = 'in'; asset.currentBookingId = null; }
+        document.getElementById('stat-offsite').textContent = allAssets.filter(a => a.status === 'out').length;
+        renderTable();
+        loadBookings();
+      } catch (err) {
+        btn.textContent = '📥 Return';
+        btn.disabled = false;
+        alert('Error updating asset. Please try again.');
+        console.error(err);
+      }
     };
 
     async function loadBookings() {
