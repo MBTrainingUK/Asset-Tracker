@@ -271,6 +271,10 @@
       <div class="stat-label">Locations</div>
     </div>
     <div class="stat-card">
+      <div class="stat-num" id="stat-offsite" style="color:#856404;">—</div>
+      <div class="stat-label">Off-Site</div>
+    </div>
+    <div class="stat-card">
       <div class="stat-num" id="stat-filtered">—</div>
       <div class="stat-label">Showing</div>
     </div>
@@ -287,6 +291,14 @@
         <option value="">All locations</option>
       </select>
     </div>
+    <div class="filter-group" style="max-width:150px;">
+      <label for="filter-status">Status</label>
+      <select id="filter-status">
+        <option value="">All</option>
+        <option value="in">📍 On-Site</option>
+        <option value="out">🚗 Off-Site</option>
+      </select>
+    </div>
     <button class="btn-reset" onclick="resetFilters()">Reset</button>
   </div>
 
@@ -296,6 +308,16 @@
       <button class="btn-export" onclick="exportCSV()">⬇ Export CSV</button>
     </div>
     <div id="table-container">
+      <div class="loading"><span class="spinner"></span></div>
+    </div>
+  </div>
+
+  <div class="table-wrapper" style="margin-top:28px;">
+    <div class="table-header">
+      <span style="font-weight:700; color:#1a1a2e; font-size:0.95rem;">📋 Booking History</span>
+      <button class="btn-export" onclick="exportBookingsCSV()">⬇ Export</button>
+    </div>
+    <div id="bookings-container">
       <div class="loading"><span class="spinner"></span></div>
     </div>
   </div>
@@ -339,8 +361,10 @@
 
         document.getElementById('stat-total').textContent = allAssets.length;
         document.getElementById('stat-locations').textContent = locations.length;
+        document.getElementById('stat-offsite').textContent = allAssets.filter(a => a.status === 'out').length;
 
         renderTable();
+        loadBookings();
       } catch (err) {
         document.getElementById('table-container').innerHTML =
           '<div class="no-results">Error loading assets. Check console.</div>';
@@ -351,13 +375,16 @@
     function getFiltered() {
       const search = document.getElementById('filter-search').value.toLowerCase().trim();
       const location = document.getElementById('filter-location').value;
+      const status = document.getElementById('filter-status').value;
 
       return allAssets.filter(a => {
         const matchSearch = !search ||
           (a._id || '').toLowerCase().includes(search) ||
           (a.description || '').toLowerCase().includes(search);
         const matchLocation = !location || a.location === location;
-        return matchSearch && matchLocation;
+        const assetStatus = a.status === 'out' ? 'out' : 'in';
+        const matchStatus = !status || assetStatus === status;
+        return matchSearch && matchLocation && matchStatus;
       });
     }
 
@@ -387,6 +414,7 @@
         { key: 'id', label: 'Asset ID' },
         { key: 'location', label: 'Location' },
         { key: 'description', label: 'Description' },
+        { key: 'status', label: 'Status' },
         { key: 'updatedAt', label: 'Last Updated' },
         { key: 'actions', label: '' }
       ];
@@ -413,10 +441,15 @@
           ? asset.updatedAt.toDate().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
           : '—';
 
+        const statusHtml = asset.status === 'out'
+          ? '<span style="background:#fff3cd;color:#856404;padding:3px 10px;border-radius:12px;font-size:0.78rem;font-weight:600;">🚗 Off-Site</span>'
+          : '<span style="background:#d1e7dd;color:#0a5c36;padding:3px 10px;border-radius:12px;font-size:0.78rem;font-weight:600;">📍 On-Site</span>';
+
         html += `<tr>
           <td class="asset-id-cell">${asset._id}</td>
           <td>${asset.location || '—'}</td>
           <td class="desc-cell">${asset.description || '—'}</td>
+          <td>${statusHtml}</td>
           <td class="date-cell">${updatedAt}</td>
           <td><a class="action-link" href="index.html?id=${asset._id}">View →</a></td>
         </tr>`;
@@ -439,17 +472,18 @@
     window.resetFilters = function () {
       document.getElementById('filter-search').value = '';
       document.getElementById('filter-location').value = '';
+      document.getElementById('filter-status').value = '';
       renderTable();
     };
 
     window.exportCSV = function () {
       const filtered = getSorted(getFiltered());
-      const rows = [['Asset ID', 'Location', 'Description', 'Last Updated']];
+      const rows = [['Asset ID', 'Location', 'Description', 'Status', 'Last Updated']];
       filtered.forEach(a => {
         const date = a.updatedAt?.toDate
           ? a.updatedAt.toDate().toLocaleDateString('en-GB')
           : '';
-        rows.push([a._id, a.location || '', a.description || '', date]);
+        rows.push([a._id, a.location || '', a.description || '', a.status === 'out' ? 'Off-Site' : 'On-Site', date]);
       });
       const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
       const blob = new Blob([csv], { type: 'text/csv' });
@@ -461,9 +495,84 @@
       URL.revokeObjectURL(url);
     };
 
+    async function loadBookings() {
+      try {
+        const snap = await getDocs(collection(db, 'bookings'));
+        const bookings = snap.docs.map(d => ({ ...d.data(), _id: d.id }))
+          .sort((a, b) => (b.bookedAt?.seconds || 0) - (a.bookedAt?.seconds || 0));
+
+        if (bookings.length === 0) {
+          document.getElementById('bookings-container').innerHTML =
+            '<div class="no-results">No booking records yet.</div>';
+          return;
+        }
+
+        let html = `<table><thead><tr>
+          <th>Asset ID</th>
+          <th>Taken By</th>
+          <th>Destination</th>
+          <th>Notes</th>
+          <th>Booked Out</th>
+          <th>Returned</th>
+        </tr></thead><tbody>`;
+
+        bookings.forEach(b => {
+          const bookedAt = b.bookedAt?.toDate
+            ? b.bookedAt.toDate().toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })
+            : '—';
+          const returnedAt = b.returnedAt?.toDate
+            ? b.returnedAt.toDate().toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })
+            : '<span style="background:#fff3cd;color:#856404;padding:2px 8px;border-radius:10px;font-size:0.78rem;font-weight:600;">🚗 Still Out</span>';
+          html += `<tr>
+            <td class="asset-id-cell"><a class="action-link" href="index.html?id=${b.assetId}">${b.assetId}</a></td>
+            <td>${b.bookedBy || '—'}</td>
+            <td>${b.destination || '—'}</td>
+            <td class="desc-cell">${b.notes || '—'}</td>
+            <td class="date-cell">${bookedAt}</td>
+            <td class="date-cell">${returnedAt}</td>
+          </tr>`;
+        });
+
+        html += `</tbody></table>`;
+        document.getElementById('bookings-container').innerHTML = html;
+      } catch (err) {
+        document.getElementById('bookings-container').innerHTML =
+          '<div class="no-results">Error loading bookings.</div>';
+        console.error(err);
+      }
+    }
+
+    window.exportBookingsCSV = async function () {
+      try {
+        const snap = await getDocs(collection(db, 'bookings'));
+        const bookings = snap.docs.map(d => ({ ...d.data(), _id: d.id }))
+          .sort((a, b) => (b.bookedAt?.seconds || 0) - (a.bookedAt?.seconds || 0));
+        const rows = [['Asset ID', 'Taken By', 'Destination', 'Notes', 'Booked Out', 'Returned']];
+        bookings.forEach(b => {
+          rows.push([
+            b.assetId || '',
+            b.bookedBy || '',
+            b.destination || '',
+            b.notes || '',
+            b.bookedAt?.toDate ? b.bookedAt.toDate().toLocaleString('en-GB') : '',
+            b.returnedAt?.toDate ? b.returnedAt.toDate().toLocaleString('en-GB') : 'Still Out'
+          ]);
+        });
+        const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `bookings-${new Date().toISOString().slice(0,10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (err) { console.error(err); }
+    };
+
     // Live filter on input
     document.getElementById('filter-search').addEventListener('input', renderTable);
     document.getElementById('filter-location').addEventListener('change', renderTable);
+    document.getElementById('filter-status').addEventListener('change', renderTable);
 
     loadAssets();
   </script>

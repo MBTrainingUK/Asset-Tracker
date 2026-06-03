@@ -245,6 +245,46 @@
       border-color: #4361ee;
       background: #f7f8ff;
     }
+
+    .btn-warning {
+      background: #fff3cd;
+      color: #856404;
+      margin-top: 10px;
+      border: 1.5px solid #ffc107;
+    }
+    .btn-warning:hover { opacity: 0.85; }
+
+    .btn-return {
+      background: #d1e7dd;
+      color: #0a5c36;
+      margin-top: 10px;
+      border: 1.5px solid #75b798;
+    }
+    .btn-return:hover { opacity: 0.85; }
+
+    .booking-info {
+      background: #fff8e1;
+      border: 1.5px solid #ffe082;
+      border-radius: 10px;
+      padding: 14px 16px;
+      margin-bottom: 16px;
+    }
+    .booking-info .detail-row { margin-bottom: 8px; }
+    .booking-info .detail-row:last-child { margin-bottom: 0; }
+    .booking-info .detail-label { color: #856404; }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 14px;
+      border-radius: 20px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+    .status-onsite { background: #d1e7dd; color: #0a5c36; }
+    .status-offsite { background: #fff3cd; color: #856404; }
   </style>
 </head>
 <body>
@@ -286,8 +326,25 @@
         <hr class="divider" />
 
         <div id="view-details"></div>
+        <div id="booking-details-display"></div>
+
+        <div id="bookout-form" style="display:none;">
+          <hr class="divider" />
+          <label for="input-bookedby">Taken by</label>
+          <input type="text" id="input-bookedby" placeholder="Person's full name…" autocomplete="off" />
+          <label for="input-destination">Destination / Purpose</label>
+          <input type="text" id="input-destination" placeholder="e.g. Client site, Home, Workshop" autocomplete="off" />
+          <label for="input-booknotes">Notes (optional)</label>
+          <textarea id="input-booknotes" placeholder="Any extra details…"></textarea>
+          <button class="btn-primary" onclick="confirmBookOut()">📤 Confirm Book Out</button>
+          <button class="btn-secondary" onclick="cancelBookingForm()">Cancel</button>
+        </div>
+
+        <div id="booking-msg" style="margin-top:10px; font-size:0.9rem; text-align:center; min-height:20px;"></div>
 
         <button class="btn-primary" onclick="enableEdit()">✏️ Edit Asset</button>
+        <button id="btn-bookout" class="btn-warning" onclick="showBookingForm()" style="display:none;">📤 Book Out (Off-Site)</button>
+        <button id="btn-return" class="btn-return" onclick="returnAsset()" style="display:none;">📥 Return Asset</button>
         <button class="btn-secondary" onclick="resetToLookup()">← Search Another</button>
       </div>
 
@@ -320,7 +377,7 @@
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, doc, getDoc, setDoc, serverTimestamp, collection, getDocs }
+    import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, serverTimestamp, collection, getDocs }
       from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -386,6 +443,7 @@
     let currentId = null;
     let isNewAsset = false;
     let qrScanner = null;
+    let currentBookingId = null;
 
     window.startScan = function () {
       const wrapper = document.getElementById('qr-reader-wrapper');
@@ -455,6 +513,8 @@
             ? data.updatedAt.toDate().toLocaleString('en-GB')
             : 'Unknown';
 
+          const isOut = (data.status === 'out');
+
           document.getElementById('view-details').innerHTML = `
             <div class="detail-row">
               <span class="detail-label">Location</span>
@@ -466,6 +526,17 @@
             </div>
             <div class="updated-text">Last updated: ${updatedAt}</div>
           `;
+
+          // Set up booking buttons and clear previous state
+          document.getElementById('btn-bookout').style.display = isOut ? 'none' : 'block';
+          document.getElementById('btn-return').style.display = isOut ? 'block' : 'none';
+          document.getElementById('bookout-form').style.display = 'none';
+          document.getElementById('booking-details-display').innerHTML = '';
+          document.getElementById('booking-msg').textContent = '';
+          currentBookingId = data.currentBookingId || null;
+          if (isOut && currentBookingId) {
+            loadActiveBooking(currentBookingId);
+          }
 
           document.getElementById('view-mode').style.display = 'block';
           document.getElementById('edit-mode').style.display = 'none';
@@ -546,17 +617,161 @@
     window.resetToLookup = function () {
       currentId = null;
       isNewAsset = false;
+      currentBookingId = null;
       document.getElementById('asset-id-input').value = '';
       document.getElementById('lookup-status').textContent = '';
       document.getElementById('status-msg').textContent = '';
+      document.getElementById('booking-msg').textContent = '';
       document.getElementById('lookup-section').style.display = 'block';
       document.getElementById('asset-section').style.display = 'none';
+    };
+
+    async function loadActiveBooking(bookingId) {
+      try {
+        const bSnap = await getDoc(doc(db, 'bookings', bookingId));
+        if (!bSnap.exists()) return;
+        const b = bSnap.data();
+        const bookedAt = b.bookedAt?.toDate
+          ? b.bookedAt.toDate().toLocaleString('en-GB')
+          : '—';
+        document.getElementById('booking-details-display').innerHTML = `
+          <div class="booking-info">
+            <div class="status-pill status-offsite">🚗 Currently Off-Site</div>
+            <div class="detail-row">
+              <span class="detail-label">Taken by</span>
+              <span class="detail-value">${b.bookedBy || '—'}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Destination</span>
+              <span class="detail-value">${b.destination || '—'}</span>
+            </div>
+            ${b.notes ? `<div class="detail-row"><span class="detail-label">Notes</span><span class="detail-value">${b.notes}</span></div>` : ''}
+            <div class="detail-row">
+              <span class="detail-label">Booked out</span>
+              <span class="detail-value">${bookedAt}</span>
+            </div>
+          </div>
+        `;
+      } catch (e) { console.error(e); }
+    }
+
+    window.showBookingForm = function () {
+      document.getElementById('bookout-form').style.display = 'block';
+      document.getElementById('input-bookedby').focus();
+      document.getElementById('btn-bookout').style.display = 'none';
+    };
+
+    window.cancelBookingForm = function () {
+      document.getElementById('bookout-form').style.display = 'none';
+      document.getElementById('btn-bookout').style.display = 'block';
+      document.getElementById('input-bookedby').value = '';
+      document.getElementById('input-destination').value = '';
+      document.getElementById('input-booknotes').value = '';
+    };
+
+    window.confirmBookOut = async function () {
+      const bookedBy = document.getElementById('input-bookedby').value.trim();
+      const destination = document.getElementById('input-destination').value.trim();
+      const notes = document.getElementById('input-booknotes').value.trim();
+      const msgEl = document.getElementById('booking-msg');
+
+      if (!bookedBy) {
+        msgEl.textContent = 'Please enter who is taking this asset.';
+        msgEl.style.color = '#e63946';
+        return;
+      }
+      if (!destination) {
+        msgEl.textContent = 'Please enter a destination or purpose.';
+        msgEl.style.color = '#e63946';
+        return;
+      }
+
+      msgEl.innerHTML = '<span class="spinner"></span> Booking out…';
+      msgEl.style.color = '';
+
+      try {
+        const bookingRef = await addDoc(collection(db, 'bookings'), {
+          assetId: currentId,
+          bookedBy,
+          destination,
+          notes,
+          bookedAt: serverTimestamp(),
+          returnedAt: null
+        });
+
+        await updateDoc(doc(db, 'assets', currentId), {
+          status: 'out',
+          currentBookingId: bookingRef.id,
+          updatedAt: serverTimestamp()
+        });
+
+        msgEl.textContent = '✅ Asset booked out!';
+        msgEl.style.color = '#2d8a4e';
+
+        setTimeout(() => {
+          document.getElementById('bookout-form').style.display = 'none';
+          document.getElementById('btn-return').style.display = 'block';
+          document.getElementById('btn-bookout').style.display = 'none';
+          currentBookingId = bookingRef.id;
+          loadActiveBooking(bookingRef.id);
+          document.getElementById('input-bookedby').value = '';
+          document.getElementById('input-destination').value = '';
+          document.getElementById('input-booknotes').value = '';
+          msgEl.textContent = '';
+        }, 1200);
+
+      } catch (err) {
+        msgEl.textContent = 'Error booking out. Please try again.';
+        msgEl.style.color = '#e63946';
+        console.error(err);
+      }
+    };
+
+    window.returnAsset = async function () {
+      if (!currentBookingId) return;
+      const msgEl = document.getElementById('booking-msg');
+      msgEl.innerHTML = '<span class="spinner"></span> Recording return…';
+      msgEl.style.color = '';
+
+      try {
+        await updateDoc(doc(db, 'bookings', currentBookingId), {
+          returnedAt: serverTimestamp()
+        });
+
+        await updateDoc(doc(db, 'assets', currentId), {
+          status: 'in',
+          currentBookingId: null,
+          updatedAt: serverTimestamp()
+        });
+
+        document.getElementById('booking-details-display').innerHTML =
+          '<div class="status-pill status-onsite" style="margin-bottom:16px;">📍 Back On-Site</div>';
+        document.getElementById('btn-return').style.display = 'none';
+        document.getElementById('btn-bookout').style.display = 'block';
+        currentBookingId = null;
+        msgEl.textContent = '✅ Asset returned successfully!';
+        msgEl.style.color = '#2d8a4e';
+        setTimeout(() => { msgEl.textContent = ''; }, 3000);
+
+      } catch (err) {
+        msgEl.textContent = 'Error recording return. Please try again.';
+        msgEl.style.color = '#e63946';
+        console.error(err);
+      }
     };
 
     // Allow pressing Enter to search
     document.getElementById('asset-id-input').addEventListener('keydown', e => {
       if (e.key === 'Enter') window.lookupAsset();
     });
+
+    // Auto-lookup if ?id= param is present in URL (e.g. when linking from admin)
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlId = urlParams.get('id');
+    if (urlId) {
+      document.getElementById('asset-id-input').value = urlId;
+      window.lookupAsset();
+    }
   </script>
 
 </body>
