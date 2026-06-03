@@ -436,6 +436,7 @@
   <div class="tab-nav">
     <button class="tab-btn active" onclick="switchTab('assets')">📦 Assets</button>
     <button class="tab-btn" onclick="switchTab('bookings')">📋 Booking History</button>
+    <button class="tab-btn" onclick="switchTab('usage')">📊 Usage</button>
   </div>
 
   <!-- ASSETS TAB -->
@@ -490,12 +491,25 @@
 
   </div> <!-- /tab-bookings -->
 
+  <!-- USAGE TAB -->
+  <div class="tab-panel" id="tab-usage">
+    <div class="chart-container">
+      <div class="table-header">
+        <span class="table-title">📊 Booking Frequency by Asset</span>
+        <span style="font-size:0.8rem;color:#94a3b8;">All time</span>
+      </div>
+      <div class="chart-inner" id="usage-chart">
+        <div class="loading"><span class="spinner"></span></div>
+      </div>
+    </div>
+  </div> <!-- /tab-usage -->
+
   </div> <!-- /content -->
 
   <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, serverTimestamp }
+    import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, deleteDoc, serverTimestamp }
       from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     // --- PASSWORD GATE ---
@@ -658,8 +672,8 @@
           : '<span style="background:#d1e7dd;color:#0a5c36;padding:3px 10px;border-radius:12px;font-size:0.78rem;font-weight:600;">📍 On-Site</span>';
 
         const actionCell = asset.status === 'out' && asset.currentBookingId
-          ? `<button class="btn-inline-return" onclick="returnAssetFromAdmin('${asset._id}', '${asset.currentBookingId}', this)">📥 Return</button>`
-          : `<a class="action-link" href="index.html?id=${asset._id}">View →</a>`;
+          ? `<div class="action-cell"><button class="btn-inline-return" onclick="returnAssetFromAdmin('${asset._id}', '${asset.currentBookingId}', this)">📥 Return</button><button class="btn-inline-remove" onclick="removeAsset('${asset._id}', this)">🗑</button></div>`
+          : `<div class="action-cell"><a class="action-link" href="index.html?id=${asset._id}">View →</a><button class="btn-inline-remove" onclick="removeAsset('${asset._id}', this)">🗑</button></div>`;
 
         html += `<tr>
           <td class="asset-id-cell">${asset._id}</td>
@@ -817,15 +831,84 @@
     document.getElementById('filter-location').addEventListener('change', renderTable);
     document.getElementById('filter-status').addEventListener('change', renderTable);
 
+    window.removeAsset = async function (assetId, btn) {
+      if (!confirm(`Permanently remove asset ${assetId}?\n\nThis cannot be undone. Booking history will be kept.`)) return;
+      btn.textContent = '⏳';
+      btn.disabled = true;
+      try {
+        await deleteDoc(doc(db, 'assets', assetId));
+        allAssets = allAssets.filter(a => a._id !== assetId);
+        document.getElementById('stat-total').textContent = allAssets.length;
+        document.getElementById('stat-offsite').textContent = allAssets.filter(a => a.status === 'out').length;
+        renderTable();
+      } catch (err) {
+        btn.textContent = '🗑';
+        btn.disabled = false;
+        alert('Error removing asset. Please try again.');
+        console.error(err);
+      }
+    };
+
+    async function loadUsageChart() {
+      const el = document.getElementById('usage-chart');
+      el.innerHTML = '<div class="loading"><span class="spinner"></span></div>';
+      try {
+        const snap = await getDocs(collection(db, 'bookings'));
+        const counts = {};
+        snap.docs.forEach(d => {
+          const id = d.data().assetId;
+          if (id) counts[id] = (counts[id] || 0) + 1;
+        });
+
+        if (Object.keys(counts).length === 0) {
+          el.innerHTML = '<div class="no-results">No booking data yet.</div>';
+          return;
+        }
+
+        const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+        const max = sorted[0][1];
+
+        let html = '';
+        sorted.forEach(([id, count]) => {
+          const pct = Math.max(4, Math.round((count / max) * 100));
+          const desc = allAssets.find(a => a._id === id)?.description || '';
+          const label = desc ? `${id}` : id;
+          const sublabel = desc ? `<div style="font-size:0.7rem;color:#94a3b8;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:90px;">${desc}</div>` : '';
+          html += `
+            <div class="chart-bar-row">
+              <div class="chart-bar-label">${label}${sublabel}</div>
+              <div class="chart-bar-track">
+                <div class="chart-bar-fill" style="width:${pct}%">
+                  ${pct > 15 ? `<span class="chart-bar-val">${count} booking${count !== 1 ? 's' : ''}</span>` : ''}
+                </div>
+              </div>
+              ${pct <= 15 ? `<span class="chart-bar-val-outside">${count}</span>` : ''}
+            </div>`;
+        });
+        el.innerHTML = html;
+      } catch (err) {
+        el.innerHTML = '<div class="no-results">Error loading usage data.</div>';
+        console.error(err);
+      }
+    }
+
+    let usageLoaded = false;
+
     window.switchTab = function (tab) {
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       document.getElementById('tab-' + tab).classList.add('active');
       document.querySelectorAll('.tab-btn').forEach(b => {
-        if (b.textContent.toLowerCase().includes(tab === 'assets' ? 'asset' : 'booking')) {
-          b.classList.add('active');
-        }
+        if (
+          (tab === 'assets' && b.textContent.toLowerCase().includes('asset')) ||
+          (tab === 'bookings' && b.textContent.toLowerCase().includes('booking')) ||
+          (tab === 'usage' && b.textContent.toLowerCase().includes('usage'))
+        ) b.classList.add('active');
       });
+      if (tab === 'usage' && !usageLoaded) {
+        usageLoaded = true;
+        loadUsageChart();
+      }
     };
 
     loadAssets();
