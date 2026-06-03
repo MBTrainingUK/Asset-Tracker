@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Reset Assets</title>
+  <style>
+    body { font-family: sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #f0f2f5; margin: 0; }
+    .box { background: white; border-radius: 16px; padding: 40px; max-width: 460px; width: 100%; box-shadow: 0 2px 12px rgba(0,0,0,0.1); text-align: center; }
+    h2 { color: #1a1a2e; margin-bottom: 12px; }
+    p { color: #666; margin-bottom: 8px; font-size: 0.95rem; }
+    .warning { background: #fff3cd; border: 1.5px solid #ffc107; border-radius: 10px; padding: 12px 16px; margin: 16px 0 24px; font-size: 0.88rem; color: #856404; }
+    .btn-row { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    button { padding: 13px 24px; border: none; border-radius: 10px; font-size: 0.95rem; font-weight: 600; cursor: pointer; }
+    .btn-full  { background: #e63946; color: white; }
+    .btn-full:hover { opacity: 0.85; }
+    .btn-status { background: #fff3cd; color: #856404; border: 1.5px solid #ffc107; }
+    .btn-status:hover { opacity: 0.85; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    #status { margin-top: 24px; font-size: 0.95rem; min-height: 24px; white-space: pre-line; }
+    hr { border: none; border-top: 1.5px solid #f0f2f5; margin: 20px 0; }
+    h3 { color: #1a1a2e; font-size: 1rem; margin-bottom: 6px; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2>⚙️ Asset Reset Tool</h2>
+    <p>Choose what you want to reset below.</p>
+
+    <div class="warning">
+      ⚠️ These actions are <strong>permanent and cannot be undone.</strong> Make sure you're certain before proceeding.
+    </div>
+
+    <hr />
+    <h3>🗑️ Full Asset Reset</h3>
+    <p>Deletes <strong>all assets and all booking records</strong> from Firestore. Use this to start completely fresh.</p>
+    <br />
+    <div class="btn-row">
+      <button class="btn-full" onclick="runFullReset()">Delete Everything</button>
+    </div>
+
+    <hr />
+    <h3>🔄 Reset Off-Site Status Only</h3>
+    <p>Marks all assets as <strong>on-site</strong> and clears current booking links — without deleting assets or booking history.</p>
+    <br />
+    <div class="btn-row">
+      <button class="btn-status" onclick="runStatusReset()">Reset Status Only</button>
+    </div>
+
+    <div id="status"></div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, collection, getDocs, deleteDoc, doc, updateDoc, serverTimestamp }
+      from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyARn4prWj_fcSOwNMp_tp15M3BNZR5CmB8",
+      authDomain: "asset-tracker-fd8de.firebaseapp.com",
+      projectId: "asset-tracker-fd8de",
+      storageBucket: "asset-tracker-fd8de.firebasestorage.app",
+      messagingSenderId: "825828878834",
+      appId: "1:825828878834:web:498d9e24f73b60a0de236b"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    function setAllButtons(disabled) {
+      document.querySelectorAll('button').forEach(b => b.disabled = disabled);
+    }
+
+    window.runFullReset = async function () {
+      const statusEl = document.getElementById('status');
+      if (!confirm('This will DELETE ALL assets and ALL booking records.\n\nAre you absolutely sure?')) return;
+
+      setAllButtons(true);
+      statusEl.style.color = '#1a1a2e';
+      statusEl.textContent = '⏳ Deleting all bookings…';
+
+      try {
+        const bookingsSnap = await getDocs(collection(db, 'bookings'));
+        for (const d of bookingsSnap.docs) {
+          await deleteDoc(doc(db, 'bookings', d.id));
+        }
+
+        statusEl.textContent = '⏳ Deleting all assets…';
+
+        const assetsSnap = await getDocs(collection(db, 'assets'));
+        for (const d of assetsSnap.docs) {
+          await deleteDoc(doc(db, 'assets', d.id));
+        }
+
+        statusEl.style.color = '#2d8a4e';
+        statusEl.textContent = `✅ Done!\n${bookingsSnap.size} booking(s) deleted.\n${assetsSnap.size} asset(s) deleted.\n\nYou can close this page.`;
+      } catch (err) {
+        setAllButtons(false);
+        statusEl.style.color = '#e63946';
+        statusEl.textContent = 'Error: ' + err.message;
+        console.error(err);
+      }
+    };
+
+    window.runStatusReset = async function () {
+      const statusEl = document.getElementById('status');
+      if (!confirm('This will mark all assets as on-site and clear booking links.\n\nContinue?')) return;
+
+      setAllButtons(true);
+      statusEl.style.color = '#1a1a2e';
+      statusEl.textContent = '⏳ Resetting asset statuses…';
+
+      try {
+        const assetsSnap = await getDocs(collection(db, 'assets'));
+        let resetCount = 0;
+        for (const d of assetsSnap.docs) {
+          if (d.data().status === 'out' || d.data().currentBookingId) {
+            await updateDoc(doc(db, 'assets', d.id), {
+              status: 'in',
+              currentBookingId: null,
+              updatedAt: serverTimestamp()
+            });
+            resetCount++;
+          }
+        }
+
+        statusEl.style.color = '#2d8a4e';
+        statusEl.textContent = `✅ Done! ${resetCount} asset(s) reset to on-site.\n\nYou can close this page.`;
+        setAllButtons(false);
+      } catch (err) {
+        setAllButtons(false);
+        statusEl.style.color = '#e63946';
+        statusEl.textContent = 'Error: ' + err.message;
+        console.error(err);
+      }
+    };
+  </script>
+</body>
+</html>

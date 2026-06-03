@@ -14,6 +14,91 @@
       padding: 24px 20px;
     }
 
+    #auth-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #f0f2f5;
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+    }
+    #auth-overlay.visible { display: flex; }
+
+    .auth-box {
+      background: white;
+      border-radius: 16px;
+      padding: 40px 32px;
+      max-width: 360px;
+      width: 100%;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+
+    .auth-box h2 {
+      font-size: 1.3rem;
+      color: #1a1a2e;
+      margin-bottom: 8px;
+    }
+
+    .auth-box p {
+      font-size: 0.88rem;
+      color: #888;
+      margin-bottom: 24px;
+    }
+
+    .auth-box input[type="password"] {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 10px;
+      font-size: 1rem;
+      color: #1a1a2e;
+      background: #fafafa;
+      margin-bottom: 14px;
+      text-align: center;
+      letter-spacing: 0.15em;
+    }
+
+    .auth-box input[type="password"]:focus {
+      outline: none;
+      border-color: #4361ee;
+      background: white;
+    }
+
+    .auth-remember {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 20px;
+      font-size: 0.88rem;
+      color: #555;
+      cursor: pointer;
+    }
+
+    .auth-remember input { width: auto; margin: 0; cursor: pointer; }
+
+    .auth-box button {
+      width: 100%;
+      padding: 13px;
+      background: #4361ee;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .auth-box button:hover { opacity: 0.9; }
+
+    #auth-error {
+      margin-top: 14px;
+      font-size: 0.88rem;
+      color: #e63946;
+      min-height: 20px;
+    }
+
     header {
       display: flex;
       justify-content: space-between;
@@ -302,6 +387,20 @@
 </head>
 <body>
 
+  <!-- PASSWORD GATE -->
+  <div id="auth-overlay">
+    <div class="auth-box">
+      <h2>🔒 Admin Access</h2>
+      <p>Enter the password to continue</p>
+      <input type="password" id="auth-input" placeholder="Password" autocomplete="current-password" />
+      <label class="auth-remember">
+        <input type="checkbox" id="auth-remember" /> Remember me on this device
+      </label>
+      <button onclick="checkPassword()">Unlock</button>
+      <div id="auth-error"></div>
+    </div>
+  </div>
+
   <header>
     <h1>🗂️ Admin Dashboard</h1>
     <a href="index.html">← Back to Scanner</a>
@@ -388,6 +487,41 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, serverTimestamp }
       from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    // --- PASSWORD GATE ---
+    const ADMIN_PASSWORD = 'Tracker';
+    const STORAGE_KEY = 'adminAuth';
+
+    function checkAuth() {
+      if (localStorage.getItem(STORAGE_KEY) === 'granted') return; // remembered
+      document.getElementById('auth-overlay').classList.add('visible');
+      document.getElementById('auth-input').focus();
+    }
+
+    window.checkPassword = function () {
+      const val = document.getElementById('auth-input').value;
+      const remember = document.getElementById('auth-remember').checked;
+      if (val === ADMIN_PASSWORD) {
+        if (remember) localStorage.setItem(STORAGE_KEY, 'granted');
+        document.getElementById('auth-overlay').classList.remove('visible');
+        document.getElementById('auth-input').value = '';
+      } else {
+        const err = document.getElementById('auth-error');
+        err.textContent = 'Incorrect password. Try again.';
+        document.getElementById('auth-input').value = '';
+        document.getElementById('auth-input').focus();
+        setTimeout(() => { err.textContent = ''; }, 3000);
+      }
+    };
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && document.getElementById('auth-overlay').classList.contains('visible')) {
+        window.checkPassword();
+      }
+    });
+
+    checkAuth();
+    // --- END PASSWORD GATE ---
 
     const firebaseConfig = {
       apiKey: "AIzaSyARn4prWj_fcSOwNMp_tp15M3BNZR5CmB8",
