@@ -190,6 +190,56 @@
       color: #aaa;
       margin-top: 4px;
     }
+
+    .btn-scan {
+      width: 100%;
+      padding: 13px;
+      border: 2px dashed #4361ee;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: #f7f8ff;
+      color: #4361ee;
+      margin-bottom: 14px;
+      transition: background 0.2s;
+    }
+
+    .btn-scan:hover { background: #e2e6ff; }
+
+    #qr-reader-wrapper {
+      display: none;
+      margin-bottom: 16px;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1.5px solid #e0e0e0;
+      background: #000;
+      position: relative;
+    }
+
+    #qr-reader {
+      width: 100%;
+    }
+
+    #qr-reader video {
+      width: 100% !important;
+      border-radius: 0 !important;
+    }
+
+    #qr-reader img { display: none !important; }
+
+    #btn-stop-scan {
+      display: block;
+      width: 100%;
+      padding: 10px;
+      background: #fff0f0;
+      border: none;
+      border-top: 1.5px solid #e0e0e0;
+      color: #e63946;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -202,7 +252,12 @@
   <!-- STEP 1: Enter asset ID -->
   <div class="card" id="lookup-section">
     <h2>Look up an asset</h2>
-    <label for="asset-id-input">Asset Number</label>
+    <button class="btn-scan" onclick="startScan()">📷 Scan QR Code</button>
+    <div id="qr-reader-wrapper">
+      <div id="qr-reader"></div>
+      <button id="btn-stop-scan" onclick="stopScan()">✕ Cancel Scan</button>
+    </div>
+    <label for="asset-id-input">Or enter manually</label>
     <input
       type="text"
       id="asset-id-input"
@@ -252,6 +307,7 @@
   </div>
 
   <!-- Firebase SDK -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getFirestore, doc, getDoc, setDoc, serverTimestamp }
@@ -271,6 +327,42 @@
 
     let currentId = null;
     let isNewAsset = false;
+    let qrScanner = null;
+
+    window.startScan = function () {
+      const wrapper = document.getElementById('qr-reader-wrapper');
+      wrapper.style.display = 'block';
+      document.getElementById('lookup-status').textContent = '';
+
+      qrScanner = new Html5Qrcode('qr-reader');
+      qrScanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 220, height: 220 } },
+        (decodedText) => {
+          // Strip any URL prefix, just keep the number
+          const match = decodedText.match(/(\d+)$/);
+          const id = match ? match[1] : decodedText.trim();
+          stopScan();
+          document.getElementById('asset-id-input').value = id;
+          window.lookupAsset();
+        },
+        () => {} // ignore scan errors
+      ).catch(err => {
+        document.getElementById('lookup-status').textContent = 'Camera access denied. Please allow camera permissions.';
+        wrapper.style.display = 'none';
+        console.error(err);
+      });
+    };
+
+    window.stopScan = function () {
+      if (qrScanner) {
+        qrScanner.stop().then(() => {
+          qrScanner.clear();
+          qrScanner = null;
+        }).catch(() => {});
+      }
+      document.getElementById('qr-reader-wrapper').style.display = 'none';
+    };
 
     window.lookupAsset = async function () {
       const raw = document.getElementById('asset-id-input').value.trim();
