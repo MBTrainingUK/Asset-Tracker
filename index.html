@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Asset Tracker</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f0f2f5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 16px;
+    }
+
+    header {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 32px;
+    }
+
+    header h1 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+
+    header a {
+      font-size: 0.85rem;
+      color: #4361ee;
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 28px 24px;
+      width: 100%;
+      max-width: 480px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+
+    .card h2 {
+      font-size: 1.1rem;
+      color: #1a1a2e;
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #555;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    input, textarea, select {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 10px;
+      font-size: 1rem;
+      color: #1a1a2e;
+      background: #fafafa;
+      transition: border-color 0.2s;
+      margin-bottom: 16px;
+    }
+
+    input:focus, textarea:focus, select:focus {
+      outline: none;
+      border-color: #4361ee;
+      background: white;
+    }
+
+    textarea { resize: vertical; min-height: 90px; }
+
+    button {
+      width: 100%;
+      padding: 13px;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+
+    button:active { transform: scale(0.98); }
+
+    .btn-primary { background: #4361ee; color: white; }
+    .btn-primary:hover { opacity: 0.9; }
+
+    .btn-secondary {
+      background: #f0f2f5;
+      color: #4361ee;
+      margin-top: 10px;
+    }
+
+    .btn-danger {
+      background: #fff0f0;
+      color: #e63946;
+      margin-top: 10px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    .badge-new { background: #fff3cd; color: #856404; }
+    .badge-found { background: #d1e7dd; color: #0a5c36; }
+
+    .asset-id {
+      font-size: 2rem;
+      font-weight: 800;
+      color: #4361ee;
+      letter-spacing: 0.05em;
+      margin-bottom: 4px;
+    }
+
+    .detail-row {
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 14px;
+    }
+
+    .detail-label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 2px;
+    }
+
+    .detail-value {
+      font-size: 1rem;
+      color: #1a1a2e;
+    }
+
+    .divider {
+      border: none;
+      border-top: 1.5px solid #f0f2f5;
+      margin: 20px 0;
+    }
+
+    #status-msg {
+      margin-top: 14px;
+      font-size: 0.9rem;
+      text-align: center;
+      min-height: 22px;
+    }
+
+    .msg-success { color: #2d8a4e; }
+    .msg-error { color: #e63946; }
+
+    #lookup-section, #asset-section { display: block; }
+    #asset-section { display: none; }
+
+    .spinner {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      border: 3px solid #e0e0e0;
+      border-top-color: #4361ee;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .updated-text {
+      font-size: 0.78rem;
+      color: #aaa;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>📦 Asset Tracker</h1>
+    <a href="admin.html">Admin Dashboard →</a>
+  </header>
+
+  <!-- STEP 1: Enter asset ID -->
+  <div class="card" id="lookup-section">
+    <h2>Look up an asset</h2>
+    <label for="asset-id-input">Asset Number</label>
+    <input
+      type="text"
+      id="asset-id-input"
+      placeholder="e.g. 000001"
+      maxlength="20"
+      autocomplete="off"
+      inputmode="numeric"
+    />
+    <button class="btn-primary" onclick="lookupAsset()">Search</button>
+    <div id="lookup-status" style="margin-top:12px; font-size:0.9rem; text-align:center; color:#e63946;"></div>
+  </div>
+
+  <!-- STEP 2: View / Register / Edit asset -->
+  <div class="card" id="asset-section">
+
+    <div id="asset-display">
+      <!-- View mode -->
+      <div id="view-mode">
+        <span class="badge" id="asset-badge"></span>
+        <div class="asset-id" id="display-id"></div>
+        <hr class="divider" />
+
+        <div id="view-details"></div>
+
+        <button class="btn-primary" onclick="enableEdit()">✏️ Edit Asset</button>
+        <button class="btn-secondary" onclick="resetToLookup()">← Search Another</button>
+      </div>
+
+      <!-- Edit / Register mode -->
+      <div id="edit-mode" style="display:none;">
+        <span class="badge" id="edit-badge"></span>
+        <div class="asset-id" id="edit-display-id"></div>
+        <hr class="divider" />
+
+        <label for="input-location">Location</label>
+        <input type="text" id="input-location" placeholder="e.g. Warehouse A, Shelf 3" />
+
+        <label for="input-description">Description</label>
+        <textarea id="input-description" placeholder="e.g. Dell 24in Monitor, black"></textarea>
+
+        <button class="btn-primary" onclick="saveAsset()">💾 Save Asset</button>
+        <button class="btn-secondary" onclick="cancelEdit()">Cancel</button>
+        <div id="status-msg"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, doc, getDoc, setDoc, serverTimestamp }
+      from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyARn4prWj_fcSOwNMp_tp15M3BNZR5CmB8",
+      authDomain: "asset-tracker-fd8de.firebaseapp.com",
+      projectId: "asset-tracker-fd8de",
+      storageBucket: "asset-tracker-fd8de.firebasestorage.app",
+      messagingSenderId: "825828878834",
+      appId: "1:825828878834:web:498d9e24f73b60a0de236b"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    let currentId = null;
+    let isNewAsset = false;
+
+    window.lookupAsset = async function () {
+      const raw = document.getElementById('asset-id-input').value.trim();
+      const statusEl = document.getElementById('lookup-status');
+
+      if (!raw) {
+        statusEl.textContent = 'Please enter an asset number.';
+        return;
+      }
+
+      statusEl.innerHTML = '<span class="spinner"></span> Looking up…';
+
+      try {
+        const assetRef = doc(db, 'assets', raw);
+        const snap = await getDoc(assetRef);
+
+        currentId = raw;
+        document.getElementById('lookup-section').style.display = 'none';
+        document.getElementById('asset-section').style.display = 'block';
+        document.getElementById('display-id').textContent = raw;
+        document.getElementById('edit-display-id').textContent = raw;
+        statusEl.textContent = '';
+
+        if (snap.exists()) {
+          const data = snap.data();
+          isNewAsset = false;
+
+          document.getElementById('asset-badge').textContent = '✅ Registered';
+          document.getElementById('asset-badge').className = 'badge badge-found';
+
+          const updatedAt = data.updatedAt?.toDate
+            ? data.updatedAt.toDate().toLocaleString('en-GB')
+            : 'Unknown';
+
+          document.getElementById('view-details').innerHTML = `
+            <div class="detail-row">
+              <span class="detail-label">Location</span>
+              <span class="detail-value">${data.location || '—'}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">Description</span>
+              <span class="detail-value">${data.description || '—'}</span>
+            </div>
+            <div class="updated-text">Last updated: ${updatedAt}</div>
+          `;
+
+          document.getElementById('view-mode').style.display = 'block';
+          document.getElementById('edit-mode').style.display = 'none';
+
+        } else {
+          isNewAsset = true;
+          document.getElementById('edit-badge').textContent = '🆕 New Asset';
+          document.getElementById('edit-badge').className = 'badge badge-new';
+          document.getElementById('input-location').value = '';
+          document.getElementById('input-description').value = '';
+          document.getElementById('view-mode').style.display = 'none';
+          document.getElementById('edit-mode').style.display = 'block';
+        }
+
+      } catch (err) {
+        statusEl.textContent = 'Error looking up asset. Please try again.';
+        console.error(err);
+      }
+    };
+
+    window.enableEdit = function () {
+      const location = document.querySelector('.detail-value')?.textContent || '';
+      const description = document.querySelectorAll('.detail-value')[1]?.textContent || '';
+      document.getElementById('input-location').value = location === '—' ? '' : location;
+      document.getElementById('input-description').value = description === '—' ? '' : description;
+      document.getElementById('edit-badge').textContent = '✏️ Editing';
+      document.getElementById('edit-badge').className = 'badge badge-found';
+      document.getElementById('view-mode').style.display = 'none';
+      document.getElementById('edit-mode').style.display = 'block';
+    };
+
+    window.cancelEdit = function () {
+      if (isNewAsset) {
+        resetToLookup();
+      } else {
+        document.getElementById('view-mode').style.display = 'block';
+        document.getElementById('edit-mode').style.display = 'none';
+      }
+    };
+
+    window.saveAsset = async function () {
+      const location = document.getElementById('input-location').value.trim();
+      const description = document.getElementById('input-description').value.trim();
+      const statusEl = document.getElementById('status-msg');
+
+      if (!location) {
+        statusEl.textContent = 'Please enter a location.';
+        statusEl.className = 'msg-error';
+        return;
+      }
+
+      statusEl.innerHTML = '<span class="spinner"></span> Saving…';
+      statusEl.className = '';
+
+      try {
+        await setDoc(doc(db, 'assets', currentId), {
+          id: currentId,
+          location,
+          description,
+          updatedAt: serverTimestamp()
+        }, { merge: true });
+
+        statusEl.textContent = '✅ Saved successfully!';
+        statusEl.className = 'msg-success';
+
+        setTimeout(() => resetToLookup(), 1500);
+
+      } catch (err) {
+        statusEl.textContent = 'Error saving. Please try again.';
+        statusEl.className = 'msg-error';
+        console.error(err);
+      }
+    };
+
+    window.resetToLookup = function () {
+      currentId = null;
+      isNewAsset = false;
+      document.getElementById('asset-id-input').value = '';
+      document.getElementById('lookup-status').textContent = '';
+      document.getElementById('status-msg').textContent = '';
+      document.getElementById('lookup-section').style.display = 'block';
+      document.getElementById('asset-section').style.display = 'none';
+    };
+
+    // Allow pressing Enter to search
+    document.getElementById('asset-id-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') window.lookupAsset();
+    });
+  </script>
+
+</body>
+</html>

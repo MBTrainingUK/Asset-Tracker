@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard — Asset Tracker</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f0f2f5;
+      min-height: 100vh;
+      padding: 24px 20px;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    header h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+
+    header a {
+      font-size: 0.85rem;
+      color: #4361ee;
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .stats-row {
+      display: flex;
+      gap: 14px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+
+    .stat-card {
+      background: white;
+      border-radius: 12px;
+      padding: 16px 22px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+      flex: 1;
+      min-width: 120px;
+    }
+
+    .stat-card .stat-num {
+      font-size: 2rem;
+      font-weight: 800;
+      color: #4361ee;
+    }
+
+    .stat-card .stat-label {
+      font-size: 0.8rem;
+      color: #888;
+      font-weight: 500;
+      margin-top: 2px;
+    }
+
+    .filters {
+      background: white;
+      border-radius: 14px;
+      padding: 18px 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+      margin-bottom: 20px;
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      align-items: flex-end;
+    }
+
+    .filter-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      flex: 1;
+      min-width: 160px;
+    }
+
+    .filter-group label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .filter-group input,
+    .filter-group select {
+      padding: 9px 12px;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      color: #1a1a2e;
+      background: #fafafa;
+    }
+
+    .filter-group input:focus,
+    .filter-group select:focus {
+      outline: none;
+      border-color: #4361ee;
+      background: white;
+    }
+
+    .btn-reset {
+      padding: 9px 18px;
+      background: #f0f2f5;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: #4361ee;
+      cursor: pointer;
+      white-space: nowrap;
+      align-self: flex-end;
+    }
+
+    .btn-reset:hover { background: #e2e6ff; }
+
+    .table-wrapper {
+      background: white;
+      border-radius: 14px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+      overflow: hidden;
+    }
+
+    .table-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px;
+      border-bottom: 1.5px solid #f0f2f5;
+    }
+
+    .table-header span {
+      font-size: 0.88rem;
+      color: #888;
+    }
+
+    .btn-export {
+      padding: 7px 14px;
+      background: #4361ee;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-export:hover { opacity: 0.9; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead th {
+      text-align: left;
+      padding: 11px 20px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: #888;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: #fafafa;
+      border-bottom: 1.5px solid #f0f2f5;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    thead th:hover { color: #4361ee; }
+    thead th.sort-asc::after { content: ' ↑'; }
+    thead th.sort-desc::after { content: ' ↓'; }
+
+    tbody tr {
+      border-bottom: 1px solid #f0f2f5;
+      transition: background 0.15s;
+    }
+
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: #f7f8ff; }
+
+    td {
+      padding: 13px 20px;
+      font-size: 0.9rem;
+      color: #1a1a2e;
+      vertical-align: middle;
+    }
+
+    td.asset-id-cell {
+      font-weight: 700;
+      color: #4361ee;
+      font-family: monospace;
+      font-size: 0.95rem;
+    }
+
+    td.desc-cell {
+      color: #555;
+      max-width: 300px;
+    }
+
+    td.date-cell {
+      color: #aaa;
+      font-size: 0.82rem;
+      white-space: nowrap;
+    }
+
+    .no-results {
+      text-align: center;
+      padding: 48px 20px;
+      color: #aaa;
+      font-size: 0.95rem;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 48px 20px;
+      color: #aaa;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 22px;
+      height: 22px;
+      border: 3px solid #e0e0e0;
+      border-top-color: #4361ee;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .action-link {
+      color: #4361ee;
+      text-decoration: none;
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+
+    .action-link:hover { text-decoration: underline; }
+
+    @media (max-width: 600px) {
+      td.desc-cell, th:nth-child(3) { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>🗂️ Admin Dashboard</h1>
+    <a href="index.html">← Back to Scanner</a>
+  </header>
+
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-num" id="stat-total">—</div>
+      <div class="stat-label">Total Assets</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" id="stat-locations">—</div>
+      <div class="stat-label">Locations</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-num" id="stat-filtered">—</div>
+      <div class="stat-label">Showing</div>
+    </div>
+  </div>
+
+  <div class="filters">
+    <div class="filter-group">
+      <label for="filter-search">Search</label>
+      <input type="text" id="filter-search" placeholder="ID or description…" />
+    </div>
+    <div class="filter-group">
+      <label for="filter-location">Location</label>
+      <select id="filter-location">
+        <option value="">All locations</option>
+      </select>
+    </div>
+    <button class="btn-reset" onclick="resetFilters()">Reset</button>
+  </div>
+
+  <div class="table-wrapper">
+    <div class="table-header">
+      <span id="result-count">Loading…</span>
+      <button class="btn-export" onclick="exportCSV()">⬇ Export CSV</button>
+    </div>
+    <div id="table-container">
+      <div class="loading"><span class="spinner"></span></div>
+    </div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+    import { getFirestore, collection, getDocs }
+      from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyARn4prWj_fcSOwNMp_tp15M3BNZR5CmB8",
+      authDomain: "asset-tracker-fd8de.firebaseapp.com",
+      projectId: "asset-tracker-fd8de",
+      storageBucket: "asset-tracker-fd8de.firebasestorage.app",
+      messagingSenderId: "825828878834",
+      appId: "1:825828878834:web:498d9e24f73b60a0de236b"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    let allAssets = [];
+    let sortCol = 'id';
+    let sortDir = 'asc';
+
+    async function loadAssets() {
+      try {
+        const snap = await getDocs(collection(db, 'assets'));
+        allAssets = snap.docs.map(d => ({ ...d.data(), _id: d.id }));
+
+        // Populate location filter
+        const locations = [...new Set(allAssets.map(a => a.location).filter(Boolean))].sort();
+        const sel = document.getElementById('filter-location');
+        locations.forEach(loc => {
+          const opt = document.createElement('option');
+          opt.value = loc;
+          opt.textContent = loc;
+          sel.appendChild(opt);
+        });
+
+        document.getElementById('stat-total').textContent = allAssets.length;
+        document.getElementById('stat-locations').textContent = locations.length;
+
+        renderTable();
+      } catch (err) {
+        document.getElementById('table-container').innerHTML =
+          '<div class="no-results">Error loading assets. Check console.</div>';
+        console.error(err);
+      }
+    }
+
+    function getFiltered() {
+      const search = document.getElementById('filter-search').value.toLowerCase().trim();
+      const location = document.getElementById('filter-location').value;
+
+      return allAssets.filter(a => {
+        const matchSearch = !search ||
+          (a._id || '').toLowerCase().includes(search) ||
+          (a.description || '').toLowerCase().includes(search);
+        const matchLocation = !location || a.location === location;
+        return matchSearch && matchLocation;
+      });
+    }
+
+    function getSorted(assets) {
+      return [...assets].sort((a, b) => {
+        let valA = a[sortCol] || a._id || '';
+        let valB = b[sortCol] || b._id || '';
+        if (sortCol === 'id') { valA = a._id; valB = b._id; }
+        if (sortCol === 'updatedAt') {
+          valA = a.updatedAt?.seconds || 0;
+          valB = b.updatedAt?.seconds || 0;
+          return sortDir === 'asc' ? valA - valB : valB - valA;
+        }
+        return sortDir === 'asc'
+          ? String(valA).localeCompare(String(valB))
+          : String(valB).localeCompare(String(valA));
+      });
+    }
+
+    window.renderTable = function () {
+      const filtered = getSorted(getFiltered());
+      document.getElementById('stat-filtered').textContent = filtered.length;
+      document.getElementById('result-count').textContent =
+        `${filtered.length} asset${filtered.length !== 1 ? 's' : ''}`;
+
+      const cols = [
+        { key: 'id', label: 'Asset ID' },
+        { key: 'location', label: 'Location' },
+        { key: 'description', label: 'Description' },
+        { key: 'updatedAt', label: 'Last Updated' },
+        { key: 'actions', label: '' }
+      ];
+
+      if (filtered.length === 0) {
+        document.getElementById('table-container').innerHTML =
+          '<div class="no-results">No assets found.</div>';
+        return;
+      }
+
+      let html = `<table><thead><tr>`;
+      cols.forEach(c => {
+        if (c.key === 'actions') {
+          html += `<th></th>`;
+        } else {
+          const cls = sortCol === c.key ? `sort-${sortDir}` : '';
+          html += `<th class="${cls}" onclick="setSort('${c.key}')">${c.label}</th>`;
+        }
+      });
+      html += `</tr></thead><tbody>`;
+
+      filtered.forEach(asset => {
+        const updatedAt = asset.updatedAt?.toDate
+          ? asset.updatedAt.toDate().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+          : '—';
+
+        html += `<tr>
+          <td class="asset-id-cell">${asset._id}</td>
+          <td>${asset.location || '—'}</td>
+          <td class="desc-cell">${asset.description || '—'}</td>
+          <td class="date-cell">${updatedAt}</td>
+          <td><a class="action-link" href="index.html?id=${asset._id}">View →</a></td>
+        </tr>`;
+      });
+
+      html += `</tbody></table>`;
+      document.getElementById('table-container').innerHTML = html;
+    };
+
+    window.setSort = function (col) {
+      if (sortCol === col) {
+        sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortCol = col;
+        sortDir = 'asc';
+      }
+      renderTable();
+    };
+
+    window.resetFilters = function () {
+      document.getElementById('filter-search').value = '';
+      document.getElementById('filter-location').value = '';
+      renderTable();
+    };
+
+    window.exportCSV = function () {
+      const filtered = getSorted(getFiltered());
+      const rows = [['Asset ID', 'Location', 'Description', 'Last Updated']];
+      filtered.forEach(a => {
+        const date = a.updatedAt?.toDate
+          ? a.updatedAt.toDate().toLocaleDateString('en-GB')
+          : '';
+        rows.push([a._id, a.location || '', a.description || '', date]);
+      });
+      const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `assets-${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+
+    // Live filter on input
+    document.getElementById('filter-search').addEventListener('input', renderTable);
+    document.getElementById('filter-location').addEventListener('change', renderTable);
+
+    loadAssets();
+  </script>
+
+</body>
+</html>
