@@ -1,0 +1,6 @@
+# Utility / one-off admin scripts — never commit these
+cleanup-bookings.html
+reset-assets.html
+
+# OS files
+.DS_Store
