@@ -1,0 +1,8 @@
+{
+  "projects": {
+    "default": "asset-tracker-fd8de"
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  }
+}

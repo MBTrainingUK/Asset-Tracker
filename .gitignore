@@ -4,3 +4,6 @@ reset-assets.html
 
 # OS files
 .DS_Store
+
+# Firebase debug log
+firebase-debug.log
