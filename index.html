@@ -240,6 +240,11 @@
       font-weight: 600;
       cursor: pointer;
     }
+
+    #new-location-wrapper input {
+      border-color: #4361ee;
+      background: #f7f8ff;
+    }
   </style>
 </head>
 <body>
@@ -293,7 +298,12 @@
         <hr class="divider" />
 
         <label for="input-location">Location</label>
-        <input type="text" id="input-location" placeholder="e.g. Warehouse A, Shelf 3" />
+        <select id="input-location" onchange="handleLocationChange(this)">
+          <option value="" disabled selected>Select a location…</option>
+        </select>
+        <div id="new-location-wrapper" style="display:none; margin-top:-8px;">
+          <input type="text" id="input-new-location" placeholder="Type new location name…" />
+        </div>
 
         <label for="input-description">Description</label>
         <textarea id="input-description" placeholder="e.g. Dell 24in Monitor, black"></textarea>
@@ -310,7 +320,7 @@
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, doc, getDoc, setDoc, serverTimestamp }
+    import { getFirestore, doc, getDoc, setDoc, serverTimestamp, collection, getDocs }
       from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     const firebaseConfig = {
@@ -324,6 +334,54 @@
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
+
+    let knownLocations = [];
+
+    async function loadLocations() {
+      try {
+        const snap = await getDocs(collection(db, 'assets'));
+        const locs = new Set();
+        snap.docs.forEach(d => { if (d.data().location) locs.add(d.data().location); });
+        knownLocations = [...locs].sort();
+      } catch (e) { knownLocations = []; }
+    }
+
+    function populateLocationDropdown(selectedValue = '') {
+      const sel = document.getElementById('input-location');
+      sel.innerHTML = '<option value="" disabled>Select a location…</option>';
+      knownLocations.forEach(loc => {
+        const opt = document.createElement('option');
+        opt.value = loc;
+        opt.textContent = loc;
+        if (loc === selectedValue) opt.selected = true;
+        sel.appendChild(opt);
+      });
+      const addOpt = document.createElement('option');
+      addOpt.value = '__new__';
+      addOpt.textContent = '＋ Add new location…';
+      sel.appendChild(addOpt);
+      if (!selectedValue) sel.value = '';
+      document.getElementById('new-location-wrapper').style.display = 'none';
+      document.getElementById('input-new-location').value = '';
+    }
+
+    window.handleLocationChange = function (sel) {
+      const wrapper = document.getElementById('new-location-wrapper');
+      if (sel.value === '__new__') {
+        wrapper.style.display = 'block';
+        document.getElementById('input-new-location').focus();
+      } else {
+        wrapper.style.display = 'none';
+      }
+    };
+
+    function getLocationValue() {
+      const sel = document.getElementById('input-location');
+      if (sel.value === '__new__') {
+        return document.getElementById('input-new-location').value.trim();
+      }
+      return sel.value;
+    }
 
     let currentId = null;
     let isNewAsset = false;
@@ -416,7 +474,8 @@
           isNewAsset = true;
           document.getElementById('edit-badge').textContent = '🆕 New Asset';
           document.getElementById('edit-badge').className = 'badge badge-new';
-          document.getElementById('input-location').value = '';
+          await loadLocations();
+          populateLocationDropdown();
           document.getElementById('input-description').value = '';
           document.getElementById('view-mode').style.display = 'none';
           document.getElementById('edit-mode').style.display = 'block';
@@ -428,10 +487,12 @@
       }
     };
 
-    window.enableEdit = function () {
+    window.enableEdit = async function () {
       const location = document.querySelector('.detail-value')?.textContent || '';
       const description = document.querySelectorAll('.detail-value')[1]?.textContent || '';
-      document.getElementById('input-location').value = location === '—' ? '' : location;
+      const locValue = location === '—' ? '' : location;
+      await loadLocations();
+      populateLocationDropdown(locValue);
       document.getElementById('input-description').value = description === '—' ? '' : description;
       document.getElementById('edit-badge').textContent = '✏️ Editing';
       document.getElementById('edit-badge').className = 'badge badge-found';
@@ -449,12 +510,12 @@
     };
 
     window.saveAsset = async function () {
-      const location = document.getElementById('input-location').value.trim();
+      const location = getLocationValue();
       const description = document.getElementById('input-description').value.trim();
       const statusEl = document.getElementById('status-msg');
 
       if (!location) {
-        statusEl.textContent = 'Please enter a location.';
+        statusEl.textContent = 'Please select or enter a location.';
         statusEl.className = 'msg-error';
         return;
       }
