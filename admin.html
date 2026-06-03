@@ -489,19 +489,26 @@
       from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
     // --- PASSWORD GATE ---
-    const ADMIN_PASSWORD = 'Tracker';
+    const ADMIN_HASH = '1d87e1c4de97aaa0a711fbec00cbc5289be757d97b742ba60e9ed57ca184f85b';
     const STORAGE_KEY = 'adminAuth';
 
+    async function hashPassword(password) {
+      const msgBuffer = new TextEncoder().encode(password);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+      return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
     function checkAuth() {
-      if (localStorage.getItem(STORAGE_KEY) === 'granted') return; // remembered
+      if (localStorage.getItem(STORAGE_KEY) === 'granted') return;
       document.getElementById('auth-overlay').classList.add('visible');
       document.getElementById('auth-input').focus();
     }
 
-    window.checkPassword = function () {
+    window.checkPassword = async function () {
       const val = document.getElementById('auth-input').value;
       const remember = document.getElementById('auth-remember').checked;
-      if (val === ADMIN_PASSWORD) {
+      const hashed = await hashPassword(val);
+      if (hashed === ADMIN_HASH) {
         if (remember) localStorage.setItem(STORAGE_KEY, 'granted');
         document.getElementById('auth-overlay').classList.remove('visible');
         document.getElementById('auth-input').value = '';
