@@ -390,21 +390,29 @@
   <!-- PASSWORD GATE -->
   <div id="auth-overlay">
     <div class="auth-box">
-      <h2>🔒 Admin Access</h2>
-      <p>Enter the password to continue</p>
+      <div class="auth-logo">📦</div>
+      <h2>Admin Access</h2>
+      <p>Enter your password to continue</p>
       <input type="password" id="auth-input" placeholder="Password" autocomplete="current-password" />
       <label class="auth-remember">
         <input type="checkbox" id="auth-remember" /> Remember me on this device
       </label>
-      <button onclick="checkPassword()">Unlock</button>
+      <button onclick="checkPassword()">Unlock Dashboard</button>
       <div id="auth-error"></div>
     </div>
   </div>
 
   <header>
-    <h1>🗂️ Admin Dashboard</h1>
-    <a href="index.html">← Back to Scanner</a>
+    <div class="header-brand">
+      <div class="header-icon">📦</div>
+      <h1>Asset Tracker — Admin</h1>
+    </div>
+    <div class="header-right">
+      <a href="index.html">← Scanner</a>
+    </div>
   </header>
+
+  <div class="content">
 
   <div class="stats-row">
     <div class="stat-card">
@@ -416,7 +424,7 @@
       <div class="stat-label">Locations</div>
     </div>
     <div class="stat-card">
-      <div class="stat-num" id="stat-offsite" style="color:#856404;">—</div>
+      <div class="stat-num" id="stat-offsite" style="color:#d97706;">—</div>
       <div class="stat-label">Off-Site</div>
     </div>
     <div class="stat-card">
@@ -458,7 +466,7 @@
   <div class="table-wrapper">
     <div class="table-header">
       <span id="result-count">Loading…</span>
-      <button class="btn-export" onclick="exportCSV()">⬇ Export CSV</button>
+      <button class="btn-export" onclick="exportCSV()">⬇️ Export CSV</button>
     </div>
     <div id="table-container">
       <div class="loading"><span class="spinner"></span></div>
@@ -472,8 +480,8 @@
 
   <div class="table-wrapper">
     <div class="table-header">
-      <span style="font-weight:700; color:#1a1a2e; font-size:0.95rem;">📋 Booking History</span>
-      <button class="btn-export" onclick="exportBookingsCSV()">⬇ Export</button>
+      <span class="table-title">📋 Booking History</span>
+      <button class="btn-export" onclick="exportBookingsCSV()">⬇️ Export</button>
     </div>
     <div id="bookings-container">
       <div class="loading"><span class="spinner"></span></div>
@@ -481,6 +489,8 @@
   </div>
 
   </div> <!-- /tab-bookings -->
+
+  </div> <!-- /content -->
 
   <!-- Firebase SDK -->
   <script type="module">

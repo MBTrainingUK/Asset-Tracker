@@ -4,75 +4,111 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Asset Tracker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #f0f2f5;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #f4f6fb;
       min-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 24px 16px;
+      padding: 0 0 40px;
     }
 
+    /* ── Header ── */
     header {
       width: 100%;
-      max-width: 480px;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%);
+      padding: 20px 24px;
       display: flex;
       justify-content: space-between;
       align-items: center;
       margin-bottom: 32px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.18);
+    }
+
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .header-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, #4361ee, #7b2ff7);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      box-shadow: 0 2px 8px rgba(67,97,238,0.4);
     }
 
     header h1 {
-      font-size: 1.4rem;
+      font-size: 1.15rem;
       font-weight: 700;
-      color: #1a1a2e;
+      color: white;
+      letter-spacing: -0.01em;
     }
 
     header a {
-      font-size: 0.85rem;
-      color: #4361ee;
+      font-size: 0.82rem;
+      color: rgba(255,255,255,0.6);
       text-decoration: none;
       font-weight: 500;
+      transition: color 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 4px;
     }
+    header a:hover { color: white; }
 
+    /* ── Card ── */
     .card {
       background: white;
-      border-radius: 16px;
+      border-radius: 20px;
       padding: 28px 24px;
-      width: 100%;
+      width: calc(100% - 32px);
       max-width: 480px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      box-shadow: 0 4px 24px rgba(0,0,0,0.07), 0 1px 4px rgba(0,0,0,0.04);
+      border: 1px solid rgba(0,0,0,0.05);
     }
 
     .card h2 {
-      font-size: 1.1rem;
-      color: #1a1a2e;
+      font-size: 1rem;
+      font-weight: 700;
+      color: #0f172a;
       margin-bottom: 20px;
+      letter-spacing: -0.01em;
     }
 
+    /* ── Form elements ── */
     label {
       display: block;
-      font-size: 0.82rem;
+      font-size: 0.75rem;
       font-weight: 600;
-      color: #555;
+      color: #64748b;
       margin-bottom: 6px;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.06em;
     }
 
     input, textarea, select {
       width: 100%;
-      padding: 12px 14px;
-      border: 1.5px solid #e0e0e0;
+      padding: 11px 14px;
+      border: 1.5px solid #e2e8f0;
       border-radius: 10px;
-      font-size: 1rem;
-      color: #1a1a2e;
-      background: #fafafa;
-      transition: border-color 0.2s;
+      font-size: 0.95rem;
+      font-family: 'Inter', sans-serif;
+      color: #0f172a;
+      background: #f8fafc;
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
       margin-bottom: 16px;
     }
 
@@ -80,58 +116,81 @@
       outline: none;
       border-color: #4361ee;
       background: white;
+      box-shadow: 0 0 0 3px rgba(67,97,238,0.1);
     }
 
-    textarea { resize: vertical; min-height: 90px; }
+    textarea { resize: vertical; min-height: 88px; }
 
+    /* ── Buttons ── */
     button {
       width: 100%;
-      padding: 13px;
+      padding: 12px;
       border: none;
       border-radius: 10px;
-      font-size: 1rem;
+      font-size: 0.95rem;
       font-weight: 600;
+      font-family: 'Inter', sans-serif;
       cursor: pointer;
-      transition: opacity 0.2s, transform 0.1s;
+      transition: all 0.2s;
+      letter-spacing: -0.01em;
     }
 
     button:active { transform: scale(0.98); }
 
-    .btn-primary { background: #4361ee; color: white; }
-    .btn-primary:hover { opacity: 0.9; }
+    .btn-primary {
+      background: linear-gradient(135deg, #4361ee, #3a56d4);
+      color: white;
+      box-shadow: 0 2px 12px rgba(67,97,238,0.35);
+    }
+    .btn-primary:hover {
+      box-shadow: 0 4px 18px rgba(67,97,238,0.45);
+      transform: translateY(-1px);
+    }
 
     .btn-secondary {
-      background: #f0f2f5;
-      color: #4361ee;
+      background: #f1f5f9;
+      color: #475569;
       margin-top: 10px;
+      border: 1px solid #e2e8f0;
     }
+    .btn-secondary:hover { background: #e2e8f0; }
 
     .btn-danger {
       background: #fff0f0;
       color: #e63946;
       margin-top: 10px;
+      border: 1px solid #fecaca;
     }
 
+    /* ── Badges ── */
     .badge {
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
       padding: 4px 12px;
       border-radius: 20px;
-      font-size: 0.78rem;
+      font-size: 0.75rem;
       font-weight: 600;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
+      letter-spacing: 0.02em;
     }
+    .badge-new { background: #fef9c3; color: #854d0e; border: 1px solid #fde68a; }
+    .badge-found { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
 
-    .badge-new { background: #fff3cd; color: #856404; }
-    .badge-found { background: #d1e7dd; color: #0a5c36; }
-
+    /* ── Asset ID display ── */
     .asset-id {
-      font-size: 2rem;
+      font-size: 2.2rem;
       font-weight: 800;
-      color: #4361ee;
-      letter-spacing: 0.05em;
+      background: linear-gradient(135deg, #4361ee, #7b2ff7);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: 0.04em;
       margin-bottom: 4px;
+      line-height: 1.1;
     }
 
+    /* ── Detail rows ── */
     .detail-row {
       display: flex;
       flex-direction: column;
@@ -139,162 +198,187 @@
     }
 
     .detail-label {
-      font-size: 0.78rem;
+      font-size: 0.72rem;
       font-weight: 600;
-      color: #888;
+      color: #94a3b8;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 2px;
+      letter-spacing: 0.07em;
+      margin-bottom: 3px;
     }
 
     .detail-value {
-      font-size: 1rem;
-      color: #1a1a2e;
+      font-size: 0.97rem;
+      color: #0f172a;
+      font-weight: 500;
     }
 
     .divider {
       border: none;
-      border-top: 1.5px solid #f0f2f5;
+      border-top: 1px solid #f1f5f9;
       margin: 20px 0;
     }
 
     #status-msg {
       margin-top: 14px;
-      font-size: 0.9rem;
+      font-size: 0.88rem;
       text-align: center;
       min-height: 22px;
     }
 
-    .msg-success { color: #2d8a4e; }
-    .msg-error { color: #e63946; }
+    .msg-success { color: #16a34a; }
+    .msg-error { color: #dc2626; }
 
     #lookup-section, #asset-section { display: block; }
     #asset-section { display: none; }
 
+    /* ── Spinner ── */
     .spinner {
       display: inline-block;
-      width: 18px;
-      height: 18px;
-      border: 3px solid #e0e0e0;
+      width: 16px;
+      height: 16px;
+      border: 2.5px solid #e2e8f0;
       border-top-color: #4361ee;
       border-radius: 50%;
       animation: spin 0.7s linear infinite;
       vertical-align: middle;
       margin-right: 6px;
     }
-
     @keyframes spin { to { transform: rotate(360deg); } }
 
     .updated-text {
-      font-size: 0.78rem;
-      color: #aaa;
-      margin-top: 4px;
+      font-size: 0.75rem;
+      color: #94a3b8;
+      margin-top: 6px;
     }
 
+    /* ── QR Scan button ── */
     .btn-scan {
       width: 100%;
       padding: 13px;
-      border: 2px dashed #4361ee;
-      border-radius: 10px;
-      font-size: 1rem;
+      border: 2px dashed #c7d2fe;
+      border-radius: 12px;
+      font-size: 0.95rem;
       font-weight: 600;
+      font-family: 'Inter', sans-serif;
       cursor: pointer;
-      background: #f7f8ff;
+      background: #eef2ff;
       color: #4361ee;
-      margin-bottom: 14px;
-      transition: background 0.2s;
+      margin-bottom: 16px;
+      transition: all 0.2s;
+      letter-spacing: -0.01em;
     }
+    .btn-scan:hover { background: #e0e7ff; border-color: #4361ee; }
 
-    .btn-scan:hover { background: #e2e6ff; }
-
+    /* ── QR Reader ── */
     #qr-reader-wrapper {
       display: none;
       margin-bottom: 16px;
-      border-radius: 10px;
+      border-radius: 12px;
       overflow: hidden;
-      border: 1.5px solid #e0e0e0;
+      border: 1.5px solid #e2e8f0;
       background: #000;
       position: relative;
     }
-
-    #qr-reader {
-      width: 100%;
-    }
-
-    #qr-reader video {
-      width: 100% !important;
-      border-radius: 0 !important;
-    }
-
+    #qr-reader { width: 100%; }
+    #qr-reader video { width: 100% !important; border-radius: 0 !important; }
     #qr-reader img { display: none !important; }
 
     #btn-stop-scan {
       display: block;
       width: 100%;
       padding: 10px;
-      background: #fff0f0;
+      background: #fff1f2;
       border: none;
-      border-top: 1.5px solid #e0e0e0;
-      color: #e63946;
-      font-size: 0.9rem;
+      border-top: 1px solid #fecaca;
+      color: #dc2626;
+      font-size: 0.88rem;
       font-weight: 600;
+      font-family: 'Inter', sans-serif;
       cursor: pointer;
     }
 
     #new-location-wrapper input {
       border-color: #4361ee;
-      background: #f7f8ff;
+      background: #eef2ff;
     }
 
+    /* ── Booking buttons ── */
     .btn-warning {
-      background: #fff3cd;
-      color: #856404;
+      background: #fffbeb;
+      color: #92400e;
       margin-top: 10px;
-      border: 1.5px solid #ffc107;
+      border: 1px solid #fde68a;
     }
-    .btn-warning:hover { opacity: 0.85; }
+    .btn-warning:hover { background: #fef3c7; }
 
     .btn-return {
-      background: #d1e7dd;
-      color: #0a5c36;
+      background: #f0fdf4;
+      color: #166534;
       margin-top: 10px;
-      border: 1.5px solid #75b798;
+      border: 1px solid #bbf7d0;
     }
-    .btn-return:hover { opacity: 0.85; }
+    .btn-return:hover { background: #dcfce7; }
 
+    /* ── Booking info card ── */
     .booking-info {
-      background: #fff8e1;
-      border: 1.5px solid #ffe082;
-      border-radius: 10px;
-      padding: 14px 16px;
+      background: linear-gradient(135deg, #fffbeb, #fef9c3);
+      border: 1px solid #fde68a;
+      border-radius: 12px;
+      padding: 16px;
       margin-bottom: 16px;
     }
     .booking-info .detail-row { margin-bottom: 8px; }
     .booking-info .detail-row:last-child { margin-bottom: 0; }
-    .booking-info .detail-label { color: #856404; }
+    .booking-info .detail-label { color: #92400e; }
 
+    /* ── Status pills ── */
     .status-pill {
       display: inline-flex;
       align-items: center;
       gap: 6px;
       padding: 5px 14px;
       border-radius: 20px;
-      font-size: 0.82rem;
+      font-size: 0.78rem;
       font-weight: 600;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
+      letter-spacing: 0.02em;
     }
-    .status-onsite { background: #d1e7dd; color: #0a5c36; }
-    .status-offsite { background: #fff3cd; color: #856404; }
+    .status-onsite { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .status-offsite { background: #fef9c3; color: #854d0e; border: 1px solid #fde68a; }
+
+    /* ── Divider with label ── */
+    .section-sep {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 20px 0 16px;
+    }
+    .section-sep span {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      white-space: nowrap;
+    }
+    .section-sep::before, .section-sep::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #f1f5f9;
+    }
   </style>
 </head>
 <body>
 
   <header>
-    <h1>📦 Asset Tracker</h1>
-    <a href="admin.html">Admin Dashboard →</a>
+    <div class="header-brand">
+      <div class="header-icon">📦</div>
+      <h1>Asset Tracker</h1>
+    </div>
+    <a href="admin.html">Admin →</a>
   </header>
 
-  <!-- STEP 1: Enter asset ID -->
   <div class="card" id="lookup-section">
     <h2>Look up an asset</h2>
     <button class="btn-scan" onclick="startScan()">📷 Scan QR Code</button>
@@ -315,7 +399,6 @@
     <div id="lookup-status" style="margin-top:12px; font-size:0.9rem; text-align:center; color:#e63946;"></div>
   </div>
 
-  <!-- STEP 2: View / Register / Edit asset -->
   <div class="card" id="asset-section">
 
     <div id="asset-display">
