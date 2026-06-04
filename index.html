@@ -549,37 +549,23 @@
       wrapper.style.display = 'block';
       document.getElementById('lookup-status').textContent = '';
 
-      const onDecode = (decodedText) => {
-        const match = decodedText.match(/(\d+)$/);
-        const id = match ? match[1] : decodedText.trim();
-        stopScan();
-        document.getElementById('asset-id-input').value = id;
-        window.lookupAsset();
-      };
-
-      const onError = () => {};
-
-      const tryStart = (constraints) => {
-        qrScanner = new Html5Qrcode('qr-reader');
-        return qrScanner.start(
-          constraints,
-          { fps: 10, qrbox: { width: 220, height: 220 } },
-          onDecode,
-          onError
-        );
-      };
-
-      // Try with continuous autofocus first, fall back to plain environment camera
-      tryStart({ facingMode: 'environment', advanced: [{ focusMode: 'continuous' }] })
-        .catch(() => {
-          qrScanner = new Html5Qrcode('qr-reader');
-          return tryStart({ facingMode: 'environment' });
-        })
-        .catch(err => {
-          document.getElementById('lookup-status').textContent = 'Camera access denied. Please allow camera permissions.';
-          wrapper.style.display = 'none';
-          console.error(err);
-        });
+      qrScanner = new Html5Qrcode('qr-reader');
+      qrScanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 220, height: 220 } },
+        (decodedText) => {
+          const match = decodedText.match(/(\d+)$/);
+          const id = match ? match[1] : decodedText.trim();
+          stopScan();
+          document.getElementById('asset-id-input').value = id;
+          window.lookupAsset();
+        },
+        () => {}
+      ).catch(err => {
+        document.getElementById('lookup-status').textContent = 'Camera access denied. Please allow camera permissions in your browser settings.';
+        wrapper.style.display = 'none';
+        console.error(err);
+      });
     };
 
     window.stopScan = function () {
