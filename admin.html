@@ -243,6 +243,22 @@
 
     .btn-export:hover { opacity: 0.9; }
 
+    .backup-block h3 { font-size:0.95rem; font-weight:700; color:#1e293b; margin-bottom:6px; }
+    .backup-block p  { font-size:0.85rem; color:#64748b; margin-bottom:14px; line-height:1.5; }
+    .btn-backup-export {
+      display:inline-block; padding:11px 20px; border:none; border-radius:10px;
+      font-size:0.9rem; font-weight:600; cursor:pointer;
+      background:linear-gradient(135deg,#4361ee,#7b2ff7); color:white;
+    }
+    .btn-backup-export:hover { opacity:0.9; }
+    .btn-backup-import {
+      display:inline-block; padding:11px 20px; border:none; border-radius:10px;
+      font-size:0.9rem; font-weight:600; cursor:pointer;
+      background:linear-gradient(135deg,#059669,#0d9488); color:white;
+    }
+    .btn-backup-import:hover { opacity:0.9; }
+    .backup-status { margin-top:10px; font-size:0.85rem; font-weight:500; min-height:20px; }
+
     table {
       width: 100%;
       border-collapse: collapse;
@@ -445,6 +461,7 @@
     <button class="tab-btn active" onclick="switchTab('assets')">📦 Assets</button>
     <button class="tab-btn" onclick="switchTab('bookings')">📋 Booking History</button>
     <button class="tab-btn" onclick="switchTab('usage')">📊 Usage</button>
+    <button class="tab-btn" onclick="switchTab('backup')">💾 Backup</button>
   </div>
 
   <!-- ASSETS TAB -->
@@ -520,6 +537,33 @@
       </div>
     </div>
   </div> <!-- /tab-usage -->
+
+  <!-- BACKUP TAB -->
+  <div class="tab-panel" id="tab-backup">
+    <div class="table-wrapper" style="max-width:560px;margin:0 auto;">
+      <div class="table-header"><span class="table-title">💾 Backup &amp; Restore</span></div>
+      <div style="padding:24px;display:flex;flex-direction:column;gap:24px;">
+
+        <div class="backup-block">
+          <h3>Export backup</h3>
+          <p>Downloads a JSON file containing all assets and all booking records. Save this somewhere safe.</p>
+          <button class="btn-backup-export" onclick="exportBackup()">⬇️ Download Backup JSON</button>
+          <div id="backup-export-status" class="backup-status"></div>
+        </div>
+
+        <hr style="border:none;border-top:1px solid #e2e8f0;">
+
+        <div class="backup-block">
+          <h3>Import backup</h3>
+          <p>Restores from a previously exported JSON file. <strong>Existing documents with the same ID will be overwritten.</strong></p>
+          <button class="btn-backup-import" onclick="document.getElementById('backup-file-input').click()">⬆️ Select Backup JSON</button>
+          <input type="file" id="backup-file-input" accept=".json" style="display:none" onchange="importBackup(event)">
+          <div id="backup-import-status" class="backup-status"></div>
+        </div>
+
+      </div>
+    </div>
+  </div> <!-- /tab-backup -->
 
   </div> <!-- /content -->
 
@@ -934,14 +978,93 @@
       document.getElementById('tab-' + tab).classList.add('active');
       document.querySelectorAll('.tab-btn').forEach(b => {
         if (
-          (tab === 'assets' && b.textContent.toLowerCase().includes('asset')) ||
+          (tab === 'assets'   && b.textContent.toLowerCase().includes('asset')) ||
           (tab === 'bookings' && b.textContent.toLowerCase().includes('booking')) ||
-          (tab === 'usage' && b.textContent.toLowerCase().includes('usage'))
+          (tab === 'usage'    && b.textContent.toLowerCase().includes('usage')) ||
+          (tab === 'backup'   && b.textContent.toLowerCase().includes('backup'))
         ) b.classList.add('active');
       });
       if (tab === 'usage' && !usageLoaded) {
         usageLoaded = true;
         loadUsageChart();
+      }
+    };
+
+    window.exportBackup = async function () {
+      const statusEl = document.getElementById('backup-export-status');
+      statusEl.style.color = '#64748b';
+      statusEl.textContent = 'Exporting…';
+      try {
+        const [assetsSnap, bookingsSnap] = await Promise.all([
+          getDocs(collection(db, 'assets')),
+          getDocs(collection(db, 'bookings'))
+        ]);
+        const data = {
+          exportedAt: new Date().toISOString(),
+          assets:   assetsSnap.docs.map(d => ({ _id: d.id, ...d.data() })),
+          bookings: bookingsSnap.docs.map(d => ({ _id: d.id, ...d.data() }))
+        };
+        // Convert Firestore Timestamps to ISO strings for portability
+        const replacer = (key, val) => {
+          if (val && typeof val === 'object' && val.seconds !== undefined && val.nanoseconds !== undefined) {
+            return new Date(val.seconds * 1000).toISOString();
+          }
+          return val;
+        };
+        const json = JSON.stringify(data, replacer, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = `asset-tracker-backup-${new Date().toISOString().slice(0,10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        statusEl.style.color = '#059669';
+        statusEl.textContent = `✅ Exported ${data.assets.length} assets and ${data.bookings.length} bookings.`;
+      } catch (err) {
+        statusEl.style.color = '#dc2626';
+        statusEl.textContent = 'Export failed. See console for details.';
+        console.error(err);
+      }
+    };
+
+    window.importBackup = async function (event) {
+      const file = event.target.files[0];
+      event.target.value = '';
+      if (!file) return;
+      const statusEl = document.getElementById('backup-import-status');
+      statusEl.style.color = '#64748b';
+      statusEl.textContent = 'Reading file…';
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        if (!data.assets || !data.bookings) throw new Error('Invalid backup file format.');
+        if (!confirm(`This will import:\n• ${data.assets.length} assets\n• ${data.bookings.length} bookings\n\nExisting records with the same ID will be overwritten.\n\nContinue?`)) {
+          statusEl.textContent = '';
+          return;
+        }
+        statusEl.textContent = 'Importing…';
+        const { setDoc } = await import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js');
+        let count = 0;
+        for (const asset of data.assets) {
+          const { _id, ...fields } = asset;
+          await setDoc(doc(db, 'assets', _id), fields);
+          count++;
+          statusEl.textContent = `Importing… (${count}/${data.assets.length + data.bookings.length})`;
+        }
+        for (const booking of data.bookings) {
+          const { _id, ...fields } = booking;
+          await setDoc(doc(db, 'bookings', _id), fields);
+          count++;
+          statusEl.textContent = `Importing… (${count}/${data.assets.length + data.bookings.length})`;
+        }
+        statusEl.style.color = '#059669';
+        statusEl.textContent = `✅ Restored ${data.assets.length} assets and ${data.bookings.length} bookings successfully.`;
+        loadAssets();
+      } catch (err) {
+        statusEl.style.color = '#dc2626';
+        statusEl.textContent = `Import failed: ${err.message}`;
+        console.error(err);
       }
     };
 
