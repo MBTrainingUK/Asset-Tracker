@@ -269,23 +269,6 @@
     }
     .btn-scan:hover { background: #e0e7ff; border-color: #4361ee; }
 
-    .btn-upload {
-      width: 100%;
-      padding: 13px;
-      border: 2px dashed #d1fae5;
-      border-radius: 12px;
-      font-size: 0.95rem;
-      font-weight: 600;
-      font-family: 'Inter', sans-serif;
-      cursor: pointer;
-      background: #ecfdf5;
-      color: #059669;
-      margin-bottom: 16px;
-      transition: all 0.2s;
-      letter-spacing: -0.01em;
-    }
-    .btn-upload:hover { background: #d1fae5; border-color: #059669; }
-
     /* ── QR Reader ── */
     #qr-reader-wrapper {
       display: none;
@@ -404,8 +387,6 @@
   <div class="card" id="lookup-section">
     <h2>Look up an asset</h2>
     <button class="btn-scan" onclick="startScan()">📷 Scan QR Code</button>
-    <button class="btn-upload" onclick="document.getElementById('qr-upload-input').click()">🖼️ Upload QR Photo</button>
-    <input type="file" id="qr-upload-input" accept="image/*" style="display:none" onchange="scanFromFile(event)">
     <div id="qr-reader-wrapper">
       <div id="qr-reader"></div>
       <button id="btn-stop-scan" onclick="stopScan()">✕ Cancel Scan</button>
@@ -611,25 +592,7 @@
       document.getElementById('qr-reader-wrapper').style.display = 'none';
     };
 
-    window.scanFromFile = function (event) {
-      const file = event.target.files[0];
-      event.target.value = ''; // reset so same file can be reselected
-      if (!file) return;
-      const statusEl = document.getElementById('lookup-status');
-      statusEl.innerHTML = '<span class="spinner"></span> Reading image…';
-      const reader = new Html5Qrcode('qr-reader');
-      Html5Qrcode.scanFile(file, true)
-        .then(decodedText => {
-          const match = decodedText.match(/(\d+)$/);
-          const id = match ? match[1] : decodedText.trim();
-          document.getElementById('asset-id-input').value = id;
-          statusEl.textContent = '';
-          window.lookupAsset();
-        })
-        .catch(() => {
-          statusEl.textContent = 'Could not read a QR code from that image. Please try a clearer photo.';
-        });
-    };
+
 
     window.lookupAsset = async function () {
       const raw = document.getElementById('asset-id-input').value.trim();
