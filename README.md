@@ -39,6 +39,7 @@ A lightweight web-based asset tracking system built with vanilla HTML/CSS/JS and
 | `id` | string | Asset ID (e.g. `000001`) |
 | `location` | string | Current storage location |
 | `description` | string | Human-readable description |
+| `partNo` | string | Part number (optional) |
 | `condition` | string | `good` \| `attention` \| `damaged` |
 | `status` | string | `in` (on-site) \| `out` (off-site) |
 | `currentBookingId` | string \| null | ID of active booking, if off-site |

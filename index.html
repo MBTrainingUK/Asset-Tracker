@@ -453,6 +453,9 @@
         <label for="input-description">Description</label>
         <textarea id="input-description" placeholder="e.g. Dell 24in Monitor, black"></textarea>
 
+        <label for="input-partno">Part No. <span style="font-weight:400;text-transform:none;letter-spacing:0;color:#94a3b8;">(optional)</span></label>
+        <input type="text" id="input-partno" placeholder="e.g. MNE02B/A" autocomplete="off" />
+
         <label for="input-condition">Condition</label>
         <select id="input-condition">
           <option value="good">✅ Good</option>
@@ -623,8 +626,7 @@
             <div class="detail-row">
               <span class="detail-label">Description</span>
               <span class="detail-value">${data.description || '—'}</span>
-            </div>
-            <div class="detail-row">
+            </div>            ${data.partNo ? `<div class="detail-row"><span class="detail-label">Part No.</span><span class="detail-value" style="font-family:monospace;font-size:0.93rem;">${data.partNo}</span></div>` : ''}            <div class="detail-row">
               <span class="detail-label">Condition</span>
               <span class="status-pill ${cond.cls}" style="margin-bottom:0;">${cond.label}</span>
             </div>
@@ -669,6 +671,7 @@
       await loadLocations();
       populateLocationDropdown(locValue);
       document.getElementById('input-description').value = description;
+      document.getElementById('input-partno').value = currentAssetData?.partNo || '';
       document.getElementById('input-condition').value = condition;
       document.getElementById('edit-badge').textContent = '✏️ Editing';
       document.getElementById('edit-badge').className = 'badge badge-found';
@@ -689,6 +692,7 @@
       const location = getLocationValue();
       const description = document.getElementById('input-description').value.trim();
       const condition = document.getElementById('input-condition').value || 'good';
+      const partNo = document.getElementById('input-partno').value.trim();
       const statusEl = document.getElementById('status-msg');
 
       if (!location) {
@@ -706,6 +710,7 @@
           location,
           description,
           condition,
+          partNo,
           updatedAt: serverTimestamp()
         }, { merge: true });
 

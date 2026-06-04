@@ -625,7 +625,8 @@
       return allAssets.filter(a => {
         const matchSearch = !search ||
           (a._id || '').toLowerCase().includes(search) ||
-          (a.description || '').toLowerCase().includes(search);
+          (a.description || '').toLowerCase().includes(search) ||
+          (a.partNo || '').toLowerCase().includes(search);
         const matchLocation = !location || a.location === location;
         const assetStatus = a.status === 'out' ? 'out' : 'in';
         const matchStatus = !status || assetStatus === status;
@@ -661,6 +662,7 @@
         { key: 'id', label: 'Asset ID' },
         { key: 'location', label: 'Location' },
         { key: 'description', label: 'Description' },
+        { key: 'partNo', label: 'Part No.' },
         { key: 'condition', label: 'Condition' },
         { key: 'status', label: 'Status' },
         { key: 'updatedAt', label: 'Last Updated' },
@@ -707,8 +709,7 @@
         html += `<tr>
           <td class="asset-id-cell">${asset._id}</td>
           <td>${asset.location || '—'}</td>
-          <td class="desc-cell">${asset.description || '—'}</td>
-          <td>${conditionHtml}</td>
+          <td class="desc-cell">${asset.description || '—'}</td>          <td style="font-family:monospace;font-size:0.85rem;color:#475569;">${asset.partNo || '\u2014'}</td>          <td>${conditionHtml}</td>
           <td>${statusHtml}</td>
           <td class="date-cell">${updatedAt}</td>
           <td>${actionCell}</td>
@@ -739,13 +740,13 @@
 
     window.exportCSV = function () {
       const filtered = getSorted(getFiltered());
-      const rows = [['Asset ID', 'Location', 'Description', 'Condition', 'Status', 'Last Updated']];
+      const rows = [['Asset ID', 'Location', 'Description', 'Part No.', 'Condition', 'Status', 'Last Updated']];
       filtered.forEach(a => {
         const date = a.updatedAt?.toDate
           ? a.updatedAt.toDate().toLocaleDateString('en-GB')
           : '';
         const condLabel = { good: 'Good', attention: 'Needs Attention', damaged: 'Damaged' }[a.condition || 'good'] || 'Good';
-        rows.push([a._id, a.location || '', a.description || '', condLabel, a.status === 'out' ? 'Off-Site' : 'On-Site', date]);
+        rows.push([a._id, a.location || '', a.description || '', a.partNo || '', condLabel, a.status === 'out' ? 'Off-Site' : 'On-Site', date]);
       });
       const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
       const blob = new Blob([csv], { type: 'text/csv' });
