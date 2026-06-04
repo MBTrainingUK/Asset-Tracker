@@ -551,7 +551,10 @@
 
       qrScanner = new Html5Qrcode('qr-reader');
       qrScanner.start(
-        { facingMode: 'environment' },
+        {
+          facingMode: 'environment',
+          advanced: [{ focusMode: 'continuous' }]
+        },
         { fps: 10, qrbox: { width: 220, height: 220 } },
         (decodedText) => {
           // Strip any URL prefix, just keep the number
