@@ -561,7 +561,16 @@
           window.lookupAsset();
         },
         () => {}
-      ).catch(err => {
+      ).then(() => {
+        // Apply continuous autofocus to the running video track
+        const video = document.querySelector('#qr-reader video');
+        if (video && video.srcObject) {
+          const track = video.srcObject.getVideoTracks()[0];
+          if (track) {
+            track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
+          }
+        }
+      }).catch(err => {
         document.getElementById('lookup-status').textContent = 'Camera access denied. Please allow camera permissions in your browser settings.';
         wrapper.style.display = 'none';
         console.error(err);
