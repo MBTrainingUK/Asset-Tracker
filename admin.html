@@ -47,8 +47,7 @@
       margin-bottom: 24px;
     }
 
-    .auth-box input[type="email"],
-    .auth-box input[type="password"] {
+    .auth-box input {
       width: 100%;
       padding: 12px 14px;
       border: 1.5px solid #e0e0e0;
@@ -57,6 +56,7 @@
       color: #1a1a2e;
       background: #fafafa;
       margin-bottom: 14px;
+      text-align: left;
     }
 
     .auth-box input[type="password"] {
@@ -64,8 +64,7 @@
       letter-spacing: 0.15em;
     }
 
-    .auth-box input[type="email"]:focus,
-    .auth-box input[type="password"]:focus {
+    .auth-box input:focus {
       outline: none;
       border-color: #4361ee;
       background: white;
@@ -81,10 +80,25 @@
       font-size: 1rem;
       font-weight: 600;
       cursor: pointer;
+      margin-bottom: 0;
     }
     .auth-box button:hover { opacity: 0.9; }
+    .auth-box button + button { margin-top: 10px; }
 
-    #auth-error {
+    .auth-switch {
+      margin-top: 18px;
+      font-size: 0.85rem;
+      color: #888;
+    }
+    .auth-switch a { color: #4361ee; text-decoration: none; font-weight: 500; }
+    .auth-switch a:hover { text-decoration: underline; }
+
+    .auth-notice {
+      font-size: 1.8rem;
+      margin-bottom: 12px;
+    }
+
+    #auth-error, #req-error {
       margin-top: 14px;
       font-size: 0.88rem;
       color: #e63946;
@@ -402,13 +416,49 @@
   <!-- AUTH GATE -->
   <div id="auth-overlay" class="visible">
     <div class="auth-box">
-      <div class="auth-logo">📦</div>
-      <h2>Admin Access</h2>
-      <p>Sign in to continue</p>
-      <input type="email" id="auth-email" placeholder="Email" autocomplete="email" />
-      <input type="password" id="auth-password" placeholder="Password" autocomplete="current-password" />
-      <button onclick="signIn()">Sign In</button>
-      <div id="auth-error"></div>
+
+      <!-- Sign In -->
+      <div id="auth-view-signin">
+        <div class="auth-notice">📦</div>
+        <h2>Admin Access</h2>
+        <p>Sign in to continue</p>
+        <input type="email" id="auth-email" placeholder="Email" autocomplete="email" />
+        <input type="password" id="auth-password" placeholder="Password" autocomplete="current-password" />
+        <button onclick="signIn()">Sign In</button>
+        <div id="auth-error"></div>
+        <p class="auth-switch">Need access? <a href="#" onclick="showAuthView('request'); return false;">Request it here</a></p>
+      </div>
+
+      <!-- Request Access -->
+      <div id="auth-view-request" style="display:none;">
+        <div class="auth-notice">✋</div>
+        <h2>Request Access</h2>
+        <p>An admin will review your request</p>
+        <input type="text" id="req-name" placeholder="Your name" autocomplete="name" />
+        <input type="email" id="req-email" placeholder="Email" autocomplete="email" />
+        <input type="password" id="req-password" placeholder="Password (min 6 chars)" autocomplete="new-password" />
+        <button onclick="requestAccess()">Submit Request</button>
+        <div id="req-error"></div>
+        <p class="auth-switch"><a href="#" onclick="showAuthView('signin'); return false;">← Back to Sign In</a></p>
+      </div>
+
+      <!-- Pending -->
+      <div id="auth-view-pending" style="display:none;">
+        <div class="auth-notice">⏳</div>
+        <h2>Request Pending</h2>
+        <p>Your request is awaiting approval from an admin. Check back soon.</p>
+        <button onclick="signOut()" style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;">Sign Out</button>
+      </div>
+
+      <!-- Declined -->
+      <div id="auth-view-declined" style="display:none;">
+        <div class="auth-notice">✕</div>
+        <h2>Access Declined</h2>
+        <p>Your request was declined. You can submit a new request for an admin to review.</p>
+        <button onclick="reRequest()">Request Access Again</button>
+        <button onclick="signOut()" style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;">Cancel</button>
+      </div>
+
     </div>
   </div>
 
@@ -456,6 +506,7 @@
     <button class="tab-btn" onclick="switchTab('backup')">💾 Backup</button>
     <button class="tab-btn" onclick="switchTab('deleted')">🗑 Deleted</button>
     <button class="tab-btn" onclick="switchTab('audit')">📋 Audit Log</button>
+    <button class="tab-btn" onclick="switchTab('users')">👥 Users</button>
   </div>
 
   <!-- ASSETS TAB -->
@@ -585,14 +636,23 @@
     </div>
   </div> <!-- /tab-audit -->
 
+  <!-- USERS TAB -->
+  <div class="tab-panel" id="tab-users">
+    <div class="table-wrapper" style="max-width:700px;">
+      <div id="users-container">
+        <div class="loading"><span class="spinner"></span></div>
+      </div>
+    </div>
+  </div> <!-- /tab-users -->
+
   </div> <!-- /content -->
 
   <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, collection, getDocs, addDoc, doc, getDoc, updateDoc, deleteDoc, deleteField, serverTimestamp }
+    import { getFirestore, collection, getDocs, addDoc, doc, getDoc, setDoc, updateDoc, deleteDoc, deleteField, serverTimestamp }
       from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut as fbSignOut }
+    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut as fbSignOut }
       from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     import { firebaseConfig } from './firebase-config.js';
 
@@ -600,10 +660,19 @@
     const db = getFirestore(app);
     const auth = getAuth(app);
 
+    function showAuthView(view) {
+      ['signin', 'request', 'pending', 'declined'].forEach(v => {
+        document.getElementById('auth-view-' + v).style.display = v === view ? 'block' : 'none';
+      });
+      const focusMap = { signin: 'auth-email', request: 'req-name' };
+      if (focusMap[view]) setTimeout(() => document.getElementById(focusMap[view]).focus(), 100);
+    }
+
     window.signIn = async function () {
       const email = document.getElementById('auth-email').value.trim();
       const password = document.getElementById('auth-password').value;
       const errEl = document.getElementById('auth-error');
+      errEl.style.color = '#e63946';
       errEl.textContent = '';
       try {
         await signInWithEmailAndPassword(auth, email, password);
@@ -615,27 +684,95 @@
       }
     };
 
+    window.requestAccess = async function () {
+      const name = document.getElementById('req-name').value.trim();
+      const email = document.getElementById('req-email').value.trim();
+      const password = document.getElementById('req-password').value;
+      const errEl = document.getElementById('req-error');
+      errEl.textContent = '';
+      if (!name) { errEl.textContent = 'Please enter your name.'; return; }
+      if (password.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; return; }
+      try {
+        const cred = await createUserWithEmailAndPassword(auth, email, password);
+        await setDoc(doc(db, 'adminUsers', cred.user.uid), {
+          email, name, status: 'pending', requestedAt: serverTimestamp()
+        });
+        await fbSignOut(auth);
+        showAuthView('signin');
+        const authErr = document.getElementById('auth-error');
+        authErr.style.color = '#16a34a';
+        authErr.textContent = 'Request submitted — an admin will review it soon.';
+        setTimeout(() => { authErr.textContent = ''; }, 5000);
+      } catch (e) {
+        errEl.textContent = e.code === 'auth/email-already-in-use'
+          ? 'That email is already registered. Try signing in.'
+          : 'Something went wrong. Please try again.';
+      }
+    };
+
+    window.reRequest = async function () {
+      try {
+        await updateDoc(doc(db, 'adminUsers', auth.currentUser.uid), {
+          status: 'pending',
+          requestedAt: serverTimestamp(),
+          declinedAt: deleteField(),
+          declinedBy: deleteField()
+        });
+        await fbSignOut(auth);
+        showAuthView('signin');
+        const authErr = document.getElementById('auth-error');
+        authErr.style.color = '#16a34a';
+        authErr.textContent = 'Request re-submitted — an admin will review it soon.';
+        setTimeout(() => { authErr.textContent = ''; }, 5000);
+      } catch (e) { console.error(e); }
+    };
+
     window.signOut = async function () {
       await fbSignOut(auth);
     };
 
     document.addEventListener('keydown', e => {
       if (e.key === 'Enter' && document.getElementById('auth-overlay').classList.contains('visible')) {
-        window.signIn();
+        const activeView = ['signin', 'request'].find(v =>
+          document.getElementById('auth-view-' + v).style.display !== 'none'
+        );
+        if (activeView === 'signin') window.signIn();
+        if (activeView === 'request') window.requestAccess();
       }
     });
 
-    onAuthStateChanged(auth, user => {
+    onAuthStateChanged(auth, async user => {
       const overlay = document.getElementById('auth-overlay');
       const signoutBtn = document.getElementById('btn-signout');
       if (user) {
-        overlay.classList.remove('visible');
-        signoutBtn.style.display = 'block';
-        loadAssets();
+        const adminDoc = await getDoc(doc(db, 'adminUsers', user.uid));
+        if (!adminDoc.exists()) {
+          // Original console-created admin — auto-approve on first login
+          await setDoc(doc(db, 'adminUsers', user.uid), {
+            email: user.email,
+            name: user.email.split('@')[0],
+            status: 'approved',
+            approvedAt: serverTimestamp()
+          });
+          overlay.classList.remove('visible');
+          signoutBtn.style.display = 'block';
+          loadAssets();
+        } else {
+          const status = adminDoc.data().status;
+          if (status === 'approved') {
+            overlay.classList.remove('visible');
+            signoutBtn.style.display = 'block';
+            loadAssets();
+          } else {
+            overlay.classList.add('visible');
+            signoutBtn.style.display = 'none';
+            showAuthView(status === 'pending' ? 'pending' : 'declined');
+          }
+        }
       } else {
         overlay.classList.add('visible');
         signoutBtn.style.display = 'none';
-        setTimeout(() => document.getElementById('auth-email').focus(), 100);
+        showAuthView('signin');
       }
     });
 
@@ -643,6 +780,7 @@
     let deletedAssets = [];
     let allBookings = [];
     let allAuditLog = [];
+    let allAdminUsers = [];
     let sortCol = 'id';
     let sortDir = 'asc';
     let dangerMode = false;
@@ -1074,6 +1212,102 @@
       el.innerHTML = html;
     }
 
+    async function loadAdminUsers() {
+      try {
+        const snap = await getDocs(collection(db, 'adminUsers'));
+        allAdminUsers = snap.docs.map(d => ({ ...d.data(), _id: d.id }));
+        renderUsersTab();
+      } catch (err) {
+        document.getElementById('users-container').innerHTML =
+          '<div class="no-results">Error loading users.</div>';
+        console.error(err);
+      }
+    }
+
+    function renderUsersTab() {
+      const pending  = allAdminUsers.filter(u => u.status === 'pending');
+      const approved = allAdminUsers.filter(u => u.status === 'approved');
+      const el = document.getElementById('users-container');
+      let html = '';
+
+      html += `<div class="table-header"><span class="table-title">⏳ Pending Requests</span></div>`;
+      if (pending.length === 0) {
+        html += '<div class="no-results" style="padding:20px 24px;">No pending requests.</div>';
+      } else {
+        html += `<table><thead><tr><th>Name</th><th>Email</th><th>Requested</th><th></th></tr></thead><tbody>`;
+        pending.forEach(u => {
+          const ts = u.requestedAt?.toDate ? u.requestedAt.toDate().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+          html += `<tr>
+            <td>${u.name || '—'}</td><td>${u.email}</td><td class="date-cell">${ts}</td>
+            <td><div style="display:flex;gap:8px;">
+              <button class="btn-inline-return" onclick="approveUser('${u._id}', this)">✅ Approve</button>
+              <button style="padding:5px 12px;background:#fee2e2;color:#991b1b;border:1.5px solid #fca5a5;border-radius:8px;font-size:0.82rem;font-weight:600;cursor:pointer;" onclick="declineUser('${u._id}', this)">✕ Decline</button>
+            </div></td>
+          </tr>`;
+        });
+        html += `</tbody></table>`;
+      }
+
+      html += `<hr style="border:none;border-top:1px solid #f0f2f5;">`;
+      html += `<div class="table-header"><span class="table-title">✅ Current Admins</span></div>`;
+      if (approved.length === 0) {
+        html += '<div class="no-results" style="padding:20px 24px;">No approved admins.</div>';
+      } else {
+        html += `<table><thead><tr><th>Name</th><th>Email</th><th>Approved</th><th></th></tr></thead><tbody>`;
+        approved.forEach(u => {
+          const ts = u.approvedAt?.toDate ? u.approvedAt.toDate().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : '—';
+          const isSelf = u._id === auth.currentUser?.uid;
+          html += `<tr>
+            <td>${u.name || '—'}</td><td>${u.email}</td><td class="date-cell">${ts}</td>
+            <td>${isSelf
+              ? '<span style="font-size:0.8rem;color:#94a3b8;">You</span>'
+              : `<button style="padding:5px 12px;background:#fee2e2;color:#991b1b;border:1.5px solid #fca5a5;border-radius:8px;font-size:0.82rem;font-weight:600;cursor:pointer;" onclick="revokeUser('${u._id}', this)">Revoke</button>`
+            }</td>
+          </tr>`;
+        });
+        html += `</tbody></table>`;
+      }
+      el.innerHTML = html;
+    }
+
+    window.approveUser = async function (uid, btn) {
+      btn.textContent = '⏳'; btn.disabled = true;
+      try {
+        await updateDoc(doc(db, 'adminUsers', uid), {
+          status: 'approved', approvedAt: serverTimestamp(), approvedBy: auth.currentUser.email
+        });
+        const u = allAdminUsers.find(u => u._id === uid);
+        if (u) { u.status = 'approved'; u.approvedAt = { toDate: () => new Date() }; }
+        renderUsersTab();
+      } catch (err) { btn.textContent = '✅ Approve'; btn.disabled = false; console.error(err); }
+    };
+
+    window.declineUser = async function (uid, btn) {
+      if (!confirm('Decline this access request?')) return;
+      btn.textContent = '⏳'; btn.disabled = true;
+      try {
+        await updateDoc(doc(db, 'adminUsers', uid), {
+          status: 'declined', declinedAt: serverTimestamp(), declinedBy: auth.currentUser.email
+        });
+        const u = allAdminUsers.find(u => u._id === uid);
+        if (u) u.status = 'declined';
+        renderUsersTab();
+      } catch (err) { btn.textContent = '✕ Decline'; btn.disabled = false; console.error(err); }
+    };
+
+    window.revokeUser = async function (uid, btn) {
+      if (!confirm('Revoke admin access for this user? They will be signed out on their next visit.')) return;
+      btn.textContent = '⏳'; btn.disabled = true;
+      try {
+        await updateDoc(doc(db, 'adminUsers', uid), {
+          status: 'declined', declinedAt: serverTimestamp(), declinedBy: auth.currentUser.email
+        });
+        const u = allAdminUsers.find(u => u._id === uid);
+        if (u) u.status = 'declined';
+        renderUsersTab();
+      } catch (err) { btn.textContent = 'Revoke'; btn.disabled = false; console.error(err); }
+    };
+
     function renderDeletedTable() {
       const el = document.getElementById('deleted-container');
       if (deletedAssets.length === 0) {
@@ -1154,15 +1388,14 @@
           (tab === 'usage'    && b.textContent.toLowerCase().includes('usage')) ||
           (tab === 'backup'   && b.textContent.toLowerCase().includes('backup')) ||
           (tab === 'deleted'  && b.textContent.toLowerCase().includes('deleted')) ||
-          (tab === 'audit'    && b.textContent.toLowerCase().includes('audit'))
+          (tab === 'audit'    && b.textContent.toLowerCase().includes('audit')) ||
+          (tab === 'users'    && b.textContent.toLowerCase().includes('users'))
         ) b.classList.add('active');
       });
-      if (tab === 'usage' && !usageLoaded) {
-        usageLoaded = true;
-        loadUsageChart();
-      }
+      if (tab === 'usage' && !usageLoaded) { usageLoaded = true; loadUsageChart(); }
       if (tab === 'deleted') renderDeletedTable();
       if (tab === 'audit') loadAuditLog();
+      if (tab === 'users') loadAdminUsers();
     };
 
     window.exportBackup = async function () {
