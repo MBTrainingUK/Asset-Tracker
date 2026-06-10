@@ -22,6 +22,13 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Audit log — admin-only read, public create with validation, no edits
+    match /auditLog/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() || validAuditEntry(request.resource.data);
+      allow update, delete: if false;
+    }
+
     // Block everything else
     match /{document=**} {
       allow read, write: if false;
@@ -47,6 +54,13 @@ service cloud.firestore {
         && (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000))
         && data.bookedAt is timestamp
         && data.returnedAt == null;
+    }
+
+    function validAuditEntry(data) {
+      return data.action in ['asset_created', 'asset_deleted', 'asset_restored', 'asset_purged']
+        && data.assetId is string && data.assetId.size() > 0 && data.assetId.size() <= 50
+        && data.performedBy is string && data.performedBy.size() > 0 && data.performedBy.size() <= 200
+        && data.timestamp is timestamp;
     }
 
     function validBookingReturn(newData, oldData) {

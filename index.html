@@ -463,6 +463,11 @@
           <option value="damaged">🔴 Damaged</option>
         </select>
 
+        <div id="registered-by-wrapper" style="display:none;">
+          <label for="input-registeredby">Registered by</label>
+          <input type="text" id="input-registeredby" placeholder="Your name…" autocomplete="off" />
+        </div>
+
         <button class="btn-primary" onclick="saveAsset()">💾 Save Asset</button>
         <button class="btn-secondary" onclick="cancelEdit()">Cancel</button>
         <div id="status-msg"></div>
@@ -661,6 +666,8 @@
           await loadLocations();
           populateLocationDropdown();
           document.getElementById('input-description').value = '';
+          document.getElementById('input-registeredby').value = '';
+          document.getElementById('registered-by-wrapper').style.display = 'block';
           document.getElementById('view-mode').style.display = 'none';
           document.getElementById('edit-mode').style.display = 'block';
         }
@@ -680,6 +687,8 @@
       document.getElementById('input-description').value = description;
       document.getElementById('input-partno').value = currentAssetData?.partNo || '';
       document.getElementById('input-condition').value = condition;
+      document.getElementById('registered-by-wrapper').style.display = 'none';
+      document.getElementById('input-registeredby').value = '';
       document.getElementById('edit-badge').textContent = '✏️ Editing';
       document.getElementById('edit-badge').className = 'badge badge-found';
       document.getElementById('view-mode').style.display = 'none';
@@ -723,6 +732,16 @@
 
         statusEl.textContent = '✅ Saved successfully!';
         statusEl.className = 'msg-success';
+
+        if (isNewAsset) {
+          const registeredBy = document.getElementById('input-registeredby').value.trim() || 'Unknown';
+          await addDoc(collection(db, 'auditLog'), {
+            action: 'asset_created',
+            assetId: currentId,
+            performedBy: registeredBy,
+            timestamp: serverTimestamp()
+          });
+        }
 
         if (location && !knownLocations.includes(location)) {
           knownLocations = [...knownLocations, location].sort();

@@ -455,6 +455,7 @@
     <button class="tab-btn" onclick="switchTab('usage')">📊 Usage</button>
     <button class="tab-btn" onclick="switchTab('backup')">💾 Backup</button>
     <button class="tab-btn" onclick="switchTab('deleted')">🗑 Deleted</button>
+    <button class="tab-btn" onclick="switchTab('audit')">📋 Audit Log</button>
   </div>
 
   <!-- ASSETS TAB -->
@@ -571,12 +572,25 @@
     </div>
   </div> <!-- /tab-deleted -->
 
+  <!-- AUDIT LOG TAB -->
+  <div class="tab-panel" id="tab-audit">
+    <div class="table-wrapper">
+      <div class="table-header">
+        <span class="table-title">📋 Audit Log</span>
+        <span style="font-size:0.8rem;color:#94a3b8;">Asset additions, deletions, restores and purges</span>
+      </div>
+      <div id="audit-container">
+        <div class="loading"><span class="spinner"></span></div>
+      </div>
+    </div>
+  </div> <!-- /tab-audit -->
+
   </div> <!-- /content -->
 
   <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, deleteDoc, deleteField, serverTimestamp }
+    import { getFirestore, collection, getDocs, addDoc, doc, getDoc, updateDoc, deleteDoc, deleteField, serverTimestamp }
       from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
     import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut as fbSignOut }
       from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -628,6 +642,7 @@
     let allAssets = [];
     let deletedAssets = [];
     let allBookings = [];
+    let allAuditLog = [];
     let sortCol = 'id';
     let sortDir = 'asc';
     let dangerMode = false;
@@ -933,6 +948,12 @@
           deleted: true,
           deletedAt: serverTimestamp()
         });
+        await addDoc(collection(db, 'auditLog'), {
+          action: 'asset_deleted',
+          assetId,
+          performedBy: auth.currentUser.email,
+          timestamp: serverTimestamp()
+        });
         const removed = allAssets.find(a => a._id === assetId);
         allAssets = allAssets.filter(a => a._id !== assetId);
         if (removed) deletedAssets = [{ ...removed, deleted: true }, ...deletedAssets];
@@ -955,6 +976,12 @@
         await updateDoc(doc(db, 'assets', assetId), {
           deleted: deleteField(),
           deletedAt: deleteField()
+        });
+        await addDoc(collection(db, 'auditLog'), {
+          action: 'asset_restored',
+          assetId,
+          performedBy: auth.currentUser.email,
+          timestamp: serverTimestamp()
         });
         const restored = deletedAssets.find(a => a._id === assetId);
         deletedAssets = deletedAssets.filter(a => a._id !== assetId);
@@ -979,6 +1006,12 @@
       btn.disabled = true;
       try {
         await deleteDoc(doc(db, 'assets', assetId));
+        await addDoc(collection(db, 'auditLog'), {
+          action: 'asset_purged',
+          assetId,
+          performedBy: auth.currentUser.email,
+          timestamp: serverTimestamp()
+        });
         deletedAssets = deletedAssets.filter(a => a._id !== assetId);
         renderDeletedTable();
       } catch (err) {
@@ -988,6 +1021,50 @@
         console.error(err);
       }
     };
+
+    async function loadAuditLog() {
+      try {
+        const snap = await getDocs(collection(db, 'auditLog'));
+        allAuditLog = snap.docs.map(d => ({ ...d.data(), _id: d.id }))
+          .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+        renderAuditLog();
+      } catch (err) {
+        document.getElementById('audit-container').innerHTML =
+          '<div class="no-results">Error loading audit log.</div>';
+        console.error(err);
+      }
+    }
+
+    function renderAuditLog() {
+      const el = document.getElementById('audit-container');
+      if (allAuditLog.length === 0) {
+        el.innerHTML = '<div class="no-results">No audit log entries yet.</div>';
+        return;
+      }
+      const actionLabels = {
+        asset_created:  { label: '➕ Registered',  style: 'background:#dcfce7;color:#166534;border:1px solid #bbf7d0;' },
+        asset_deleted:  { label: '🗑 Deleted',      style: 'background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;' },
+        asset_restored: { label: '↩ Restored',     style: 'background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;' },
+        asset_purged:   { label: '💥 Purged',       style: 'background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;' }
+      };
+      let html = `<table><thead><tr>
+        <th>Timestamp</th><th>Action</th><th>Asset ID</th><th>Performed By</th>
+      </tr></thead><tbody>`;
+      allAuditLog.forEach(entry => {
+        const ts = entry.timestamp?.toDate
+          ? entry.timestamp.toDate().toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })
+          : '—';
+        const action = actionLabels[entry.action] || { label: entry.action, style: '' };
+        html += `<tr>
+          <td class="date-cell">${ts}</td>
+          <td><span style="padding:2px 10px;border-radius:12px;font-size:0.75rem;font-weight:600;white-space:nowrap;${action.style}">${action.label}</span></td>
+          <td class="asset-id-cell"><a class="action-link" href="index.html?id=${entry.assetId}">${entry.assetId}</a></td>
+          <td>${entry.performedBy || '—'}</td>
+        </tr>`;
+      });
+      html += `</tbody></table>`;
+      el.innerHTML = html;
+    }
 
     function renderDeletedTable() {
       const el = document.getElementById('deleted-container');
@@ -1068,7 +1145,8 @@
           (tab === 'bookings' && b.textContent.toLowerCase().includes('booking')) ||
           (tab === 'usage'    && b.textContent.toLowerCase().includes('usage')) ||
           (tab === 'backup'   && b.textContent.toLowerCase().includes('backup')) ||
-          (tab === 'deleted'  && b.textContent.toLowerCase().includes('deleted'))
+          (tab === 'deleted'  && b.textContent.toLowerCase().includes('deleted')) ||
+          (tab === 'audit'    && b.textContent.toLowerCase().includes('audit'))
         ) b.classList.add('active');
       });
       if (tab === 'usage' && !usageLoaded) {
@@ -1076,6 +1154,7 @@
         loadUsageChart();
       }
       if (tab === 'deleted') renderDeletedTable();
+      if (tab === 'audit') loadAuditLog();
     };
 
     window.exportBackup = async function () {
