@@ -477,15 +477,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, serverTimestamp, collection, getDocs }
       from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyARn4prWj_fcSOwNMp_tp15M3BNZR5CmB8",
-      authDomain: "asset-tracker-fd8de.firebaseapp.com",
-      projectId: "asset-tracker-fd8de",
-      storageBucket: "asset-tracker-fd8de.firebasestorage.app",
-      messagingSenderId: "825828878834",
-      appId: "1:825828878834:web:498d9e24f73b60a0de236b"
-    };
+    import { firebaseConfig } from './firebase-config.js';
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
@@ -616,7 +608,7 @@
         document.getElementById('edit-display-id').textContent = raw;
         statusEl.textContent = '';
 
-        if (snap.exists()) {
+        if (snap.exists() && !snap.data().deleted) {
           const data = snap.data();
           currentAssetData = data;
           isNewAsset = false;

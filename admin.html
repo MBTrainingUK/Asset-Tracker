@@ -47,6 +47,7 @@
       margin-bottom: 24px;
     }
 
+    .auth-box input[type="email"],
     .auth-box input[type="password"] {
       width: 100%;
       padding: 12px 14px;
@@ -56,28 +57,19 @@
       color: #1a1a2e;
       background: #fafafa;
       margin-bottom: 14px;
+    }
+
+    .auth-box input[type="password"] {
       text-align: center;
       letter-spacing: 0.15em;
     }
 
+    .auth-box input[type="email"]:focus,
     .auth-box input[type="password"]:focus {
       outline: none;
       border-color: #4361ee;
       background: white;
     }
-
-    .auth-remember {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      margin-bottom: 20px;
-      font-size: 0.88rem;
-      color: #555;
-      cursor: pointer;
-    }
-
-    .auth-remember input { width: auto; margin: 0; cursor: pointer; }
 
     .auth-box button {
       width: 100%;
@@ -407,17 +399,15 @@
 </head>
 <body>
 
-  <!-- PASSWORD GATE -->
-  <div id="auth-overlay">
+  <!-- AUTH GATE -->
+  <div id="auth-overlay" class="visible">
     <div class="auth-box">
       <div class="auth-logo">📦</div>
       <h2>Admin Access</h2>
-      <p>Enter your password to continue</p>
-      <input type="password" id="auth-input" placeholder="Password" autocomplete="current-password" />
-      <label class="auth-remember">
-        <input type="checkbox" id="auth-remember" /> Remember me on this device
-      </label>
-      <button onclick="checkPassword()">Unlock Dashboard</button>
+      <p>Sign in to continue</p>
+      <input type="email" id="auth-email" placeholder="Email" autocomplete="email" />
+      <input type="password" id="auth-password" placeholder="Password" autocomplete="current-password" />
+      <button onclick="signIn()">Sign In</button>
       <div id="auth-error"></div>
     </div>
   </div>
@@ -427,8 +417,9 @@
       <div class="header-icon">📦</div>
       <h1 id="admin-title" style="cursor:default;user-select:none;">Asset Tracker — Admin</h1>
     </div>
-    <div class="header-right">
+    <div class="header-right" style="display:flex;align-items:center;gap:14px;">
       <a href="index.html">← Scanner</a>
+      <button id="btn-signout" onclick="signOut()" style="display:none;width:auto;padding:6px 14px;font-size:0.82rem;background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;">Sign Out</button>
     </div>
   </header>
   <div id="danger-toast" style="display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1e293b;color:#f8fafc;padding:10px 20px;border-radius:8px;font-size:0.85rem;font-weight:600;z-index:9999;pointer-events:none;"></div>
@@ -463,6 +454,7 @@
     <button class="tab-btn" onclick="switchTab('bookings')">📋 Booking History</button>
     <button class="tab-btn" onclick="switchTab('usage')">📊 Usage</button>
     <button class="tab-btn" onclick="switchTab('backup')">💾 Backup</button>
+    <button class="tab-btn" onclick="switchTab('deleted')">🗑 Deleted</button>
   </div>
 
   <!-- ASSETS TAB -->
@@ -566,69 +558,75 @@
     </div>
   </div> <!-- /tab-backup -->
 
+  <!-- DELETED TAB -->
+  <div class="tab-panel" id="tab-deleted">
+    <div class="table-wrapper">
+      <div class="table-header">
+        <span class="table-title">🗑 Deleted Assets</span>
+        <span style="font-size:0.8rem;color:#94a3b8;">Restore to recover, Purge to permanently delete</span>
+      </div>
+      <div id="deleted-container">
+        <div class="loading"><span class="spinner"></span></div>
+      </div>
+    </div>
+  </div> <!-- /tab-deleted -->
+
   </div> <!-- /content -->
 
   <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, deleteDoc, serverTimestamp }
+    import { getFirestore, collection, getDocs, doc, getDoc, updateDoc, deleteDoc, deleteField, serverTimestamp }
       from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut as fbSignOut }
+      from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+    import { firebaseConfig } from './firebase-config.js';
 
-    // --- PASSWORD GATE ---
-    const ADMIN_HASH = '1d87e1c4de97aaa0a711fbec00cbc5289be757d97b742ba60e9ed57ca184f85b';
-    const STORAGE_KEY = 'adminAuth';
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
 
-    async function hashPassword(password) {
-      const msgBuffer = new TextEncoder().encode(password);
-      const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-      return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-    }
-
-    function checkAuth() {
-      if (localStorage.getItem(STORAGE_KEY) === 'granted') return;
-      document.getElementById('auth-overlay').classList.add('visible');
-      document.getElementById('auth-input').focus();
-    }
-
-    window.checkPassword = async function () {
-      const val = document.getElementById('auth-input').value;
-      const remember = document.getElementById('auth-remember').checked;
-      const hashed = await hashPassword(val);
-      if (hashed === ADMIN_HASH) {
-        if (remember) localStorage.setItem(STORAGE_KEY, 'granted');
-        document.getElementById('auth-overlay').classList.remove('visible');
-        document.getElementById('auth-input').value = '';
-      } else {
-        const err = document.getElementById('auth-error');
-        err.textContent = 'Incorrect password. Try again.';
-        document.getElementById('auth-input').value = '';
-        document.getElementById('auth-input').focus();
-        setTimeout(() => { err.textContent = ''; }, 3000);
+    window.signIn = async function () {
+      const email = document.getElementById('auth-email').value.trim();
+      const password = document.getElementById('auth-password').value;
+      const errEl = document.getElementById('auth-error');
+      errEl.textContent = '';
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+      } catch (e) {
+        errEl.textContent = 'Incorrect email or password.';
+        document.getElementById('auth-password').value = '';
+        document.getElementById('auth-password').focus();
+        setTimeout(() => { errEl.textContent = ''; }, 3000);
       }
+    };
+
+    window.signOut = async function () {
+      await fbSignOut(auth);
     };
 
     document.addEventListener('keydown', e => {
       if (e.key === 'Enter' && document.getElementById('auth-overlay').classList.contains('visible')) {
-        window.checkPassword();
+        window.signIn();
       }
     });
 
-    checkAuth();
-    // --- END PASSWORD GATE ---
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyARn4prWj_fcSOwNMp_tp15M3BNZR5CmB8",
-      authDomain: "asset-tracker-fd8de.firebaseapp.com",
-      projectId: "asset-tracker-fd8de",
-      storageBucket: "asset-tracker-fd8de.firebasestorage.app",
-      messagingSenderId: "825828878834",
-      appId: "1:825828878834:web:498d9e24f73b60a0de236b"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
+    onAuthStateChanged(auth, user => {
+      const overlay = document.getElementById('auth-overlay');
+      const signoutBtn = document.getElementById('btn-signout');
+      if (user) {
+        overlay.classList.remove('visible');
+        signoutBtn.style.display = 'block';
+        loadAssets();
+      } else {
+        overlay.classList.add('visible');
+        signoutBtn.style.display = 'none';
+        setTimeout(() => document.getElementById('auth-email').focus(), 100);
+      }
+    });
 
     let allAssets = [];
+    let deletedAssets = [];
     let allBookings = [];
     let sortCol = 'id';
     let sortDir = 'asc';
@@ -637,11 +635,14 @@
     async function loadAssets() {
       try {
         const snap = await getDocs(collection(db, 'assets'));
-        allAssets = snap.docs.map(d => ({ ...d.data(), _id: d.id }));
+        const all = snap.docs.map(d => ({ ...d.data(), _id: d.id }));
+        allAssets = all.filter(a => !a.deleted);
+        deletedAssets = all.filter(a => a.deleted);
 
         // Populate location filter
         const locations = [...new Set(allAssets.map(a => a.location).filter(Boolean))].sort();
         const sel = document.getElementById('filter-location');
+        sel.innerHTML = '<option value="">All locations</option>';
         locations.forEach(loc => {
           const opt = document.createElement('option');
           opt.value = loc;
@@ -919,12 +920,22 @@
     document.getElementById('filter-condition').addEventListener('change', renderTable);
 
     window.removeAsset = async function (assetId, btn) {
-      if (!confirm(`Permanently remove asset ${assetId}?\n\nThis cannot be undone. Booking history will be kept.`)) return;
+      const asset = allAssets.find(a => a._id === assetId);
+      if (asset && asset.status === 'out') {
+        alert(`Cannot remove asset ${assetId} — it is currently off-site. Return it first.`);
+        return;
+      }
+      if (!confirm(`Remove asset ${assetId}?\n\nIt will be moved to the Deleted tab where it can be restored or permanently purged.`)) return;
       btn.textContent = '⏳';
       btn.disabled = true;
       try {
-        await deleteDoc(doc(db, 'assets', assetId));
+        await updateDoc(doc(db, 'assets', assetId), {
+          deleted: true,
+          deletedAt: serverTimestamp()
+        });
+        const removed = allAssets.find(a => a._id === assetId);
         allAssets = allAssets.filter(a => a._id !== assetId);
+        if (removed) deletedAssets = [{ ...removed, deleted: true }, ...deletedAssets];
         document.getElementById('stat-total').textContent = allAssets.length;
         document.getElementById('stat-offsite').textContent = allAssets.filter(a => a.status === 'out').length;
         renderTable();
@@ -935,6 +946,78 @@
         console.error(err);
       }
     };
+
+    window.restoreAsset = async function (assetId, btn) {
+      if (!confirm(`Restore asset ${assetId}? It will reappear in the Assets tab.`)) return;
+      btn.textContent = '⏳';
+      btn.disabled = true;
+      try {
+        await updateDoc(doc(db, 'assets', assetId), {
+          deleted: deleteField(),
+          deletedAt: deleteField()
+        });
+        const restored = deletedAssets.find(a => a._id === assetId);
+        deletedAssets = deletedAssets.filter(a => a._id !== assetId);
+        if (restored) {
+          const { deleted: _d, deletedAt: _da, ...clean } = restored;
+          allAssets = [...allAssets, clean].sort((a, b) => a._id.localeCompare(b._id));
+        }
+        document.getElementById('stat-total').textContent = allAssets.length;
+        renderTable();
+        renderDeletedTable();
+      } catch (err) {
+        btn.textContent = 'Restore';
+        btn.disabled = false;
+        alert('Error restoring asset. Please try again.');
+        console.error(err);
+      }
+    };
+
+    window.purgeAsset = async function (assetId, btn) {
+      if (!confirm(`Permanently delete asset ${assetId}?\n\nThis cannot be undone. Booking history will be kept.`)) return;
+      btn.textContent = '⏳';
+      btn.disabled = true;
+      try {
+        await deleteDoc(doc(db, 'assets', assetId));
+        deletedAssets = deletedAssets.filter(a => a._id !== assetId);
+        renderDeletedTable();
+      } catch (err) {
+        btn.textContent = 'Purge';
+        btn.disabled = false;
+        alert('Error deleting asset. Please try again.');
+        console.error(err);
+      }
+    };
+
+    function renderDeletedTable() {
+      const el = document.getElementById('deleted-container');
+      if (deletedAssets.length === 0) {
+        el.innerHTML = '<div class="no-results">No deleted assets.</div>';
+        return;
+      }
+      let html = `<table><thead><tr>
+        <th>Asset ID</th><th>Description</th><th>Location</th><th>Deleted</th><th></th>
+      </tr></thead><tbody>`;
+      deletedAssets.forEach(asset => {
+        const deletedAt = asset.deletedAt?.toDate
+          ? asset.deletedAt.toDate().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+          : '—';
+        html += `<tr>
+          <td class="asset-id-cell">${asset._id}</td>
+          <td class="desc-cell">${asset.description || '—'}</td>
+          <td>${asset.location || '—'}</td>
+          <td class="date-cell">${deletedAt}</td>
+          <td>
+            <div class="action-cell" style="display:flex;gap:8px;">
+              <button class="btn-inline-return" onclick="restoreAsset('${asset._id}', this)">↩ Restore</button>
+              <button style="padding:5px 12px;background:#fee2e2;color:#991b1b;border:1.5px solid #fca5a5;border-radius:8px;font-size:0.82rem;font-weight:600;cursor:pointer;white-space:nowrap;" onclick="purgeAsset('${asset._id}', this)">🗑 Purge</button>
+            </div>
+          </td>
+        </tr>`;
+      });
+      html += `</tbody></table>`;
+      el.innerHTML = html;
+    }
 
     function loadUsageChart() {
       const el = document.getElementById('usage-chart');
@@ -984,13 +1067,15 @@
           (tab === 'assets'   && b.textContent.toLowerCase().includes('asset')) ||
           (tab === 'bookings' && b.textContent.toLowerCase().includes('booking')) ||
           (tab === 'usage'    && b.textContent.toLowerCase().includes('usage')) ||
-          (tab === 'backup'   && b.textContent.toLowerCase().includes('backup'))
+          (tab === 'backup'   && b.textContent.toLowerCase().includes('backup')) ||
+          (tab === 'deleted'  && b.textContent.toLowerCase().includes('deleted'))
         ) b.classList.add('active');
       });
       if (tab === 'usage' && !usageLoaded) {
         usageLoaded = true;
         loadUsageChart();
       }
+      if (tab === 'deleted') renderDeletedTable();
     };
 
     window.exportBackup = async function () {
@@ -1070,8 +1155,6 @@
         console.error(err);
       }
     };
-
-    loadAssets();
 
     (function () {
       let clicks = 0;

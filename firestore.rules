@@ -2,22 +2,60 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Assets — public read/write/delete (admin can remove assets)
-    match /assets/{assetId} {
-      allow read: if true;
-      allow create, update, delete: if true;
+    function isAdmin() {
+      return request.auth != null;
     }
 
-    // Bookings — public read/write (scanner needs this), no delete via API
+    // Assets — public read, public create/update with validation, admin-only delete
+    match /assets/{assetId} {
+      allow read: if true;
+      allow create: if isAdmin() || validAssetWrite(request.resource.data);
+      allow update: if isAdmin() || validAssetWrite(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // Bookings — public read/create/update with validation, never delete
     match /bookings/{bookingId} {
       allow read: if true;
-      allow create, update: if true;
+      allow create: if isAdmin() || validNewBooking(request.resource.data);
+      allow update: if isAdmin() || validBookingReturn(request.resource.data, resource.data);
       allow delete: if false;
     }
 
     // Block everything else
     match /{document=**} {
       allow read, write: if false;
+    }
+
+    function validAssetWrite(data) {
+      return data.id is string && data.id.size() > 0 && data.id.size() <= 50
+        && data.location is string && data.location.size() > 0 && data.location.size() <= 100
+        && data.updatedAt is timestamp
+        && (!('description' in data) || (data.description is string && data.description.size() <= 500))
+        && (!('partNo' in data) || (data.partNo is string && data.partNo.size() <= 100))
+        && (!('condition' in data) || data.condition in ['good', 'attention', 'damaged'])
+        && (!('status' in data) || data.status in ['in', 'out'])
+        && (!('currentBookingId' in data) || data.currentBookingId == null || (data.currentBookingId is string && data.currentBookingId.size() <= 128))
+        && !('deleted' in data)
+        && !('deletedAt' in data);
+    }
+
+    function validNewBooking(data) {
+      return data.assetId is string && data.assetId.size() > 0 && data.assetId.size() <= 50
+        && data.bookedBy is string && data.bookedBy.size() > 0 && data.bookedBy.size() <= 100
+        && data.destination is string && data.destination.size() > 0 && data.destination.size() <= 200
+        && (!('notes' in data) || (data.notes is string && data.notes.size() <= 1000))
+        && data.bookedAt is timestamp
+        && data.returnedAt == null;
+    }
+
+    function validBookingReturn(newData, oldData) {
+      return newData.returnedAt is timestamp
+        && oldData.returnedAt == null
+        && newData.assetId == oldData.assetId
+        && newData.bookedBy == oldData.bookedBy
+        && newData.destination == oldData.destination
+        && newData.bookedAt == oldData.bookedAt;
     }
   }
 }
