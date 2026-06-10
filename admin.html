@@ -748,8 +748,8 @@
         const conditionHtml = conditionHtmlMap[asset.condition || 'good'] || conditionHtmlMap.good;
 
         const actionCell = asset.status === 'out' && asset.currentBookingId
-          ? `<div class="action-cell"><button class="btn-inline-return" onclick="returnAssetFromAdmin('${asset._id}', '${asset.currentBookingId}', this)">📥 Return</button><button class="btn-inline-remove" onclick="removeAsset('${asset._id}', this)">🗑</button></div>`
-          : `<div class="action-cell"><a class="action-link" href="index.html?id=${asset._id}">View →</a><button class="btn-inline-remove" onclick="removeAsset('${asset._id}', this)">🗑</button></div>`;
+          ? `<div class="action-cell"><button class="btn-inline-return" onclick="returnAssetFromAdmin('${asset._id}', '${asset.currentBookingId}', this)">📥 Return</button></div>`
+          : `<div class="action-cell"><a class="action-link" href="index.html?id=${asset._id}">View →</a></div>`;
 
         html += `<tr>
           <td class="asset-id-cell">${asset._id}</td>
