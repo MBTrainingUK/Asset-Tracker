@@ -835,6 +835,12 @@
           currentBookingId: null,
           updatedAt: serverTimestamp()
         });
+        await addDoc(collection(db, 'auditLog'), {
+          action: 'asset_returned',
+          assetId,
+          performedBy: auth.currentUser.email,
+          timestamp: serverTimestamp()
+        });
         // Update in-memory and re-render
         const asset = allAssets.find(a => a._id === assetId);
         if (asset) { asset.status = 'in'; asset.currentBookingId = null; }
@@ -1042,10 +1048,12 @@
         return;
       }
       const actionLabels = {
-        asset_created:  { label: '➕ Registered',  style: 'background:#dcfce7;color:#166534;border:1px solid #bbf7d0;' },
-        asset_deleted:  { label: '🗑 Deleted',      style: 'background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;' },
-        asset_restored: { label: '↩ Restored',     style: 'background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;' },
-        asset_purged:   { label: '💥 Purged',       style: 'background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;' }
+        asset_edited:     { label: '✏️ Edited',      style: 'background:#f3f4f6;color:#374151;border:1px solid #d1d5db;' },
+        asset_booked_out: { label: '📤 Booked Out',  style: 'background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;' },
+        asset_returned:   { label: '📥 Returned',    style: 'background:#dcfce7;color:#166534;border:1px solid #bbf7d0;' },
+        asset_deleted:    { label: '🗑 Deleted',     style: 'background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;' },
+        asset_restored:   { label: '↩ Restored',    style: 'background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;' },
+        asset_purged:     { label: '💥 Purged',      style: 'background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;' }
       };
       let html = `<table><thead><tr>
         <th>Timestamp</th><th>Action</th><th>Asset ID</th><th>Performed By</th>

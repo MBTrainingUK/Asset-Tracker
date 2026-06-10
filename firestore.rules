@@ -57,7 +57,7 @@ service cloud.firestore {
     }
 
     function validAuditEntry(data) {
-      return data.action in ['asset_created', 'asset_deleted', 'asset_restored', 'asset_purged']
+      return data.action in ['asset_edited', 'asset_booked_out', 'asset_returned', 'asset_deleted', 'asset_restored', 'asset_purged']
         && data.assetId is string && data.assetId.size() > 0 && data.assetId.size() <= 50
         && data.performedBy is string && data.performedBy.size() > 0 && data.performedBy.size() <= 200
         && data.timestamp is timestamp;
