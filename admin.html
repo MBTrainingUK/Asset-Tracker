@@ -459,6 +459,14 @@
         <button onclick="signOut()" style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;">Cancel</button>
       </div>
 
+      <!-- Scanner access only -->
+      <div id="auth-view-limited" style="display:none;">
+        <div class="auth-notice">🔒</div>
+        <h2>Scanner Access Only</h2>
+        <p>Your account can use the scanner but doesn't have admin access. Contact an admin to be upgraded.</p>
+        <button onclick="signOut()" style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;">Sign Out</button>
+      </div>
+
     </div>
   </div>
 
@@ -661,7 +669,7 @@
     const auth = getAuth(app);
 
     window.showAuthView = function showAuthView(view) {
-      ['signin', 'request', 'pending', 'declined'].forEach(v => {
+      ['signin', 'request', 'pending', 'declined', 'limited'].forEach(v => {
         document.getElementById('auth-view-' + v).style.display = v === view ? 'block' : 'none';
       });
       const focusMap = { signin: 'auth-email', request: 'req-name' };
@@ -755,11 +763,15 @@
           authErr.style.color = '#e63946';
           authErr.textContent = 'You don\'t have admin access. Use "Request it here" to apply.';
         } else {
-          const status = adminDoc.data().status;
-          if (status === 'approved') {
+          const { status, role } = adminDoc.data();
+          if (status === 'approved' && (!role || role === 'admin')) {
             overlay.classList.remove('visible');
             signoutBtn.style.display = 'block';
             loadAssets();
+          } else if (status === 'approved' && role === 'member') {
+            overlay.classList.add('visible');
+            signoutBtn.style.display = 'none';
+            showAuthView('limited');
           } else {
             overlay.classList.add('visible');
             signoutBtn.style.display = 'none';
@@ -1236,8 +1248,9 @@
           const ts = u.requestedAt?.toDate ? u.requestedAt.toDate().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : '—';
           html += `<tr>
             <td>${u.name || '—'}</td><td>${u.email}</td><td class="date-cell">${ts}</td>
-            <td><div style="display:flex;gap:8px;">
-              <button class="btn-inline-return" onclick="approveUser('${u._id}', this)">✅ Approve</button>
+            <td><div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <button class="btn-inline-return" onclick="approveUser('${u._id}', 'member', this)">✅ Member</button>
+              <button style="padding:5px 12px;background:#e0e7ff;color:#3730a3;border:1.5px solid #a5b4fc;border-radius:8px;font-size:0.82rem;font-weight:600;cursor:pointer;" onclick="approveUser('${u._id}', 'admin', this)">⚡ Admin</button>
               <button style="padding:5px 12px;background:#fee2e2;color:#991b1b;border:1.5px solid #fca5a5;border-radius:8px;font-size:0.82rem;font-weight:600;cursor:pointer;" onclick="declineUser('${u._id}', this)">✕ Decline</button>
             </div></td>
           </tr>`;
@@ -1250,16 +1263,25 @@
       if (approved.length === 0) {
         html += '<div class="no-results" style="padding:20px 24px;">No approved admins.</div>';
       } else {
-        html += `<table><thead><tr><th>Name</th><th>Email</th><th>Approved</th><th></th></tr></thead><tbody>`;
+        html += `<table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Approved</th><th></th></tr></thead><tbody>`;
         approved.forEach(u => {
           const ts = u.approvedAt?.toDate ? u.approvedAt.toDate().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : '—';
           const isSelf = u._id === auth.currentUser?.uid;
+          const role = u.role || 'admin';
+          const roleBadge = role === 'admin'
+            ? '<span style="padding:2px 10px;border-radius:12px;font-size:0.75rem;font-weight:600;background:#e0e7ff;color:#3730a3;border:1px solid #a5b4fc;">⚡ Admin</span>'
+            : '<span style="padding:2px 10px;border-radius:12px;font-size:0.75rem;font-weight:600;background:#dcfce7;color:#166534;border:1px solid #bbf7d0;">👤 Member</span>';
+          const changeRoleBtn = role === 'admin'
+            ? `<button style="padding:5px 10px;background:#f0fdf4;color:#166534;border:1.5px solid #bbf7d0;border-radius:8px;font-size:0.78rem;font-weight:600;cursor:pointer;" onclick="changeRole('${u._id}', 'member', this)">→ Member</button>`
+            : `<button style="padding:5px 10px;background:#e0e7ff;color:#3730a3;border:1.5px solid #a5b4fc;border-radius:8px;font-size:0.78rem;font-weight:600;cursor:pointer;" onclick="changeRole('${u._id}', 'admin', this)">→ Admin</button>`;
           html += `<tr>
-            <td>${u.name || '—'}</td><td>${u.email}</td><td class="date-cell">${ts}</td>
-            <td>${isSelf
-              ? '<span style="font-size:0.8rem;color:#94a3b8;">You</span>'
-              : `<button style="padding:5px 12px;background:#fee2e2;color:#991b1b;border:1.5px solid #fca5a5;border-radius:8px;font-size:0.82rem;font-weight:600;cursor:pointer;" onclick="revokeUser('${u._id}', this)">Revoke</button>`
-            }</td>
+            <td>${u.name || '—'}</td><td>${u.email}</td><td>${roleBadge}</td><td class="date-cell">${ts}</td>
+            <td><div style="display:flex;gap:6px;">
+              ${isSelf ? '<span style="font-size:0.8rem;color:#94a3b8;">You</span>' : `
+                ${changeRoleBtn}
+                <button style="padding:5px 10px;background:#fee2e2;color:#991b1b;border:1.5px solid #fca5a5;border-radius:8px;font-size:0.78rem;font-weight:600;cursor:pointer;" onclick="revokeUser('${u._id}', this)">Revoke</button>
+              `}
+            </div></td>
           </tr>`;
         });
         html += `</tbody></table>`;
@@ -1267,16 +1289,26 @@
       el.innerHTML = html;
     }
 
-    window.approveUser = async function (uid, btn) {
+    window.approveUser = async function (uid, role, btn) {
       btn.textContent = '⏳'; btn.disabled = true;
       try {
         await updateDoc(doc(db, 'adminUsers', uid), {
-          status: 'approved', approvedAt: serverTimestamp(), approvedBy: auth.currentUser.email
+          status: 'approved', role, approvedAt: serverTimestamp(), approvedBy: auth.currentUser.email
         });
         const u = allAdminUsers.find(u => u._id === uid);
-        if (u) { u.status = 'approved'; u.approvedAt = { toDate: () => new Date() }; }
+        if (u) { u.status = 'approved'; u.role = role; u.approvedAt = { toDate: () => new Date() }; }
         renderUsersTab();
-      } catch (err) { btn.textContent = '✅ Approve'; btn.disabled = false; console.error(err); }
+      } catch (err) { btn.textContent = '⏳'; btn.disabled = false; console.error(err); }
+    };
+
+    window.changeRole = async function (uid, newRole, btn) {
+      btn.textContent = '⏳'; btn.disabled = true;
+      try {
+        await updateDoc(doc(db, 'adminUsers', uid), { role: newRole });
+        const u = allAdminUsers.find(u => u._id === uid);
+        if (u) u.role = newRole;
+        renderUsersTab();
+      } catch (err) { btn.textContent = '→'; btn.disabled = false; console.error(err); }
     };
 
     window.declineUser = async function (uid, btn) {

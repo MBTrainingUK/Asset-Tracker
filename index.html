@@ -46,7 +46,11 @@
       font-size: 1rem; font-weight: 600; font-family: 'Inter', sans-serif; cursor: pointer;
     }
     .scanner-auth-box button:hover { opacity: 0.9; }
-    #scanner-auth-error { margin-top: 14px; font-size: 0.88rem; color: #e63946; min-height: 20px; }
+    .scanner-auth-box button + button { margin-top: 10px; }
+    .scanner-auth-switch { margin-top: 18px; font-size: 0.85rem; color: #888; font-family: 'Inter', sans-serif; }
+    .scanner-auth-switch a { color: #4361ee; text-decoration: none; font-weight: 500; }
+    .scanner-auth-switch a:hover { text-decoration: underline; }
+    #scanner-auth-error, #scanner-req-error { margin-top: 14px; font-size: 0.88rem; color: #e63946; min-height: 20px; }
 
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -416,13 +420,49 @@
 
   <div id="scanner-auth-overlay" class="visible">
     <div class="scanner-auth-box">
-      <div style="font-size:1.8rem;margin-bottom:12px;">📦</div>
-      <h2>Asset Tracker</h2>
-      <p>Sign in to continue</p>
-      <input type="email" id="scanner-auth-email" placeholder="Email" autocomplete="email" />
-      <input type="password" id="scanner-auth-password" placeholder="Password" autocomplete="current-password" />
-      <button onclick="scannerSignIn()">Sign In</button>
-      <div id="scanner-auth-error"></div>
+
+      <!-- Sign In -->
+      <div id="scanner-view-signin">
+        <div style="font-size:1.8rem;margin-bottom:12px;">📦</div>
+        <h2>Asset Tracker</h2>
+        <p>Sign in to continue</p>
+        <input type="email" id="scanner-auth-email" placeholder="Email" autocomplete="email" />
+        <input type="password" id="scanner-auth-password" placeholder="Password" autocomplete="current-password" />
+        <button onclick="scannerSignIn()">Sign In</button>
+        <div id="scanner-auth-error"></div>
+        <p class="scanner-auth-switch">Need access? <a href="#" onclick="showScannerAuthView('request'); return false;">Request it here</a></p>
+      </div>
+
+      <!-- Request Access -->
+      <div id="scanner-view-request" style="display:none;">
+        <div style="font-size:1.8rem;margin-bottom:12px;">✋</div>
+        <h2>Request Access</h2>
+        <p>An admin will review your request</p>
+        <input type="text" id="scanner-req-name" placeholder="Your name" autocomplete="name" />
+        <input type="email" id="scanner-req-email" placeholder="Email" autocomplete="email" />
+        <input type="password" id="scanner-req-password" placeholder="Password (min 6 chars)" autocomplete="new-password" />
+        <button onclick="requestScannerAccess()">Submit Request</button>
+        <div id="scanner-req-error"></div>
+        <p class="scanner-auth-switch"><a href="#" onclick="showScannerAuthView('signin'); return false;">← Back to Sign In</a></p>
+      </div>
+
+      <!-- Pending -->
+      <div id="scanner-view-pending" style="display:none;">
+        <div style="font-size:1.8rem;margin-bottom:12px;">⏳</div>
+        <h2>Request Pending</h2>
+        <p>Your request is awaiting approval from an admin. Check back soon.</p>
+        <button onclick="scannerSignOut()" style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;">Sign Out</button>
+      </div>
+
+      <!-- Declined -->
+      <div id="scanner-view-declined" style="display:none;">
+        <div style="font-size:1.8rem;margin-bottom:12px;">✕</div>
+        <h2>Access Declined</h2>
+        <p>Your request was declined. You can submit a new request for an admin to review.</p>
+        <button onclick="reRequestScannerAccess()">Request Access Again</button>
+        <button onclick="scannerSignOut()" style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;">Cancel</button>
+      </div>
+
     </div>
   </div>
 
@@ -528,9 +568,9 @@
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, serverTimestamp, collection, getDocs }
+    import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, deleteField, serverTimestamp, collection, getDocs }
       from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut as fbSignOut }
+    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut as fbSignOut }
       from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     import { firebaseConfig } from './firebase-config.js';
 
@@ -538,10 +578,19 @@
     const db = getFirestore(app);
     const auth = getAuth(app);
 
+    window.showScannerAuthView = function (view) {
+      ['signin', 'request', 'pending', 'declined'].forEach(v => {
+        document.getElementById('scanner-view-' + v).style.display = v === view ? 'block' : 'none';
+      });
+      const focusMap = { signin: 'scanner-auth-email', request: 'scanner-req-name' };
+      if (focusMap[view]) setTimeout(() => document.getElementById(focusMap[view]).focus(), 100);
+    };
+
     window.scannerSignIn = async function () {
       const email = document.getElementById('scanner-auth-email').value.trim();
       const password = document.getElementById('scanner-auth-password').value;
       const errEl = document.getElementById('scanner-auth-error');
+      errEl.style.color = '#e63946';
       errEl.textContent = '';
       try {
         await signInWithEmailAndPassword(auth, email, password);
@@ -553,26 +602,85 @@
       }
     };
 
+    window.requestScannerAccess = async function () {
+      const name = document.getElementById('scanner-req-name').value.trim();
+      const email = document.getElementById('scanner-req-email').value.trim();
+      const password = document.getElementById('scanner-req-password').value;
+      const errEl = document.getElementById('scanner-req-error');
+      errEl.textContent = '';
+      if (!name) { errEl.textContent = 'Please enter your name.'; return; }
+      if (password.length < 6) { errEl.textContent = 'Password must be at least 6 characters.'; return; }
+      try {
+        const cred = await createUserWithEmailAndPassword(auth, email, password);
+        await setDoc(doc(db, 'adminUsers', cred.user.uid), {
+          email, name, status: 'pending', requestedAt: serverTimestamp()
+        });
+        await fbSignOut(auth);
+        showScannerAuthView('signin');
+        const authErr = document.getElementById('scanner-auth-error');
+        authErr.style.color = '#16a34a';
+        authErr.textContent = 'Request submitted — an admin will review it soon.';
+        setTimeout(() => { authErr.textContent = ''; }, 5000);
+      } catch (e) {
+        errEl.textContent = e.code === 'auth/email-already-in-use'
+          ? 'That email is already registered. Try signing in instead.'
+          : 'Something went wrong. Please try again.';
+      }
+    };
+
+    window.reRequestScannerAccess = async function () {
+      try {
+        await updateDoc(doc(db, 'adminUsers', auth.currentUser.uid), {
+          status: 'pending', requestedAt: serverTimestamp(),
+          declinedAt: deleteField(), declinedBy: deleteField()
+        });
+        await fbSignOut(auth);
+        showScannerAuthView('signin');
+        const authErr = document.getElementById('scanner-auth-error');
+        authErr.style.color = '#16a34a';
+        authErr.textContent = 'Request re-submitted — an admin will review it soon.';
+        setTimeout(() => { authErr.textContent = ''; }, 5000);
+      } catch (e) { console.error(e); }
+    };
+
     window.scannerSignOut = async function () {
       await fbSignOut(auth);
     };
 
     document.addEventListener('keydown', e => {
       if (e.key === 'Enter' && document.getElementById('scanner-auth-overlay').classList.contains('visible')) {
-        window.scannerSignIn();
+        const activeView = ['signin', 'request'].find(v =>
+          document.getElementById('scanner-view-' + v).style.display !== 'none'
+        );
+        if (activeView === 'signin') window.scannerSignIn();
+        if (activeView === 'request') window.requestScannerAccess();
       }
     });
 
-    onAuthStateChanged(auth, user => {
+    onAuthStateChanged(auth, async user => {
       const overlay = document.getElementById('scanner-auth-overlay');
       const signoutBtn = document.getElementById('btn-scanner-signout');
       if (user) {
-        overlay.classList.remove('visible');
-        signoutBtn.style.display = 'block';
+        const userDoc = await getDoc(doc(db, 'adminUsers', user.uid));
+        if (!userDoc.exists()) {
+          await fbSignOut(auth);
+          overlay.classList.add('visible');
+          showScannerAuthView('signin');
+        } else {
+          const { status } = userDoc.data();
+          if (status === 'approved') {
+            overlay.classList.remove('visible');
+            signoutBtn.style.display = 'block';
+          } else {
+            overlay.classList.add('visible');
+            signoutBtn.style.display = 'none';
+            showScannerAuthView(status === 'pending' ? 'pending' : 'declined');
+          }
+        }
       } else {
         overlay.classList.add('visible');
         signoutBtn.style.display = 'none';
-        setTimeout(() => document.getElementById('scanner-auth-email').focus(), 100);
+        showScannerAuthView('signin');
       }
     });
 
