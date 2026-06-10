@@ -425,12 +425,13 @@
   <header>
     <div class="header-brand">
       <div class="header-icon">📦</div>
-      <h1>Asset Tracker — Admin</h1>
+      <h1 id="admin-title" style="cursor:default;user-select:none;">Asset Tracker — Admin</h1>
     </div>
     <div class="header-right">
       <a href="index.html">← Scanner</a>
     </div>
   </header>
+  <div id="danger-toast" style="display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1e293b;color:#f8fafc;padding:10px 20px;border-radius:8px;font-size:0.85rem;font-weight:600;z-index:9999;pointer-events:none;"></div>
 
   <div class="content">
 
@@ -631,6 +632,7 @@
     let allBookings = [];
     let sortCol = 'id';
     let sortDir = 'asc';
+    let dangerMode = false;
 
     async function loadAssets() {
       try {
@@ -747,9 +749,10 @@
         };
         const conditionHtml = conditionHtmlMap[asset.condition || 'good'] || conditionHtmlMap.good;
 
+        const removeBtn = dangerMode ? `<button class="btn-inline-remove" onclick="removeAsset('${asset._id}', this)">🗑</button>` : '';
         const actionCell = asset.status === 'out' && asset.currentBookingId
-          ? `<div class="action-cell"><button class="btn-inline-return" onclick="returnAssetFromAdmin('${asset._id}', '${asset.currentBookingId}', this)">📥 Return</button></div>`
-          : `<div class="action-cell"><a class="action-link" href="index.html?id=${asset._id}">View →</a></div>`;
+          ? `<div class="action-cell"><button class="btn-inline-return" onclick="returnAssetFromAdmin('${asset._id}', '${asset.currentBookingId}', this)">📥 Return</button>${removeBtn}</div>`
+          : `<div class="action-cell"><a class="action-link" href="index.html?id=${asset._id}">View →</a>${removeBtn}</div>`;
 
         html += `<tr>
           <td class="asset-id-cell">${asset._id}</td>
@@ -1069,6 +1072,27 @@
     };
 
     loadAssets();
+
+    (function () {
+      let clicks = 0;
+      let timer = null;
+      document.getElementById('admin-title').addEventListener('click', () => {
+        clicks++;
+        clearTimeout(timer);
+        timer = setTimeout(() => { clicks = 0; }, 2000);
+        if (clicks >= 5) {
+          clicks = 0;
+          clearTimeout(timer);
+          dangerMode = !dangerMode;
+          renderTable();
+          const toast = document.getElementById('danger-toast');
+          toast.textContent = dangerMode ? '⚠️ Danger mode on — remove buttons visible' : '✅ Danger mode off';
+          toast.style.display = 'block';
+          clearTimeout(toast._timer);
+          toast._timer = setTimeout(() => { toast.style.display = 'none'; }, 2500);
+        }
+      });
+    })();
   </script>
 
 </body>
