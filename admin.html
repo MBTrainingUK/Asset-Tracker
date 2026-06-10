@@ -660,7 +660,7 @@
     const db = getFirestore(app);
     const auth = getAuth(app);
 
-    function showAuthView(view) {
+    window.showAuthView = function showAuthView(view) {
       ['signin', 'request', 'pending', 'declined'].forEach(v => {
         document.getElementById('auth-view-' + v).style.display = v === view ? 'block' : 'none';
       });
