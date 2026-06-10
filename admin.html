@@ -628,6 +628,7 @@
     const db = getFirestore(app);
 
     let allAssets = [];
+    let allBookings = [];
     let sortCol = 'id';
     let sortDir = 'asc';
 
@@ -820,7 +821,9 @@
         if (asset) { asset.status = 'in'; asset.currentBookingId = null; }
         document.getElementById('stat-offsite').textContent = allAssets.filter(a => a.status === 'out').length;
         renderTable();
-        loadBookings();
+        const booking = allBookings.find(b => b._id === bookingId);
+        if (booking) { booking.returnedAt = { toDate: () => new Date(), seconds: Date.now() / 1000 }; }
+        renderBookings();
       } catch (err) {
         btn.textContent = '📥 Return';
         btn.disabled = false;
@@ -832,16 +835,24 @@
     async function loadBookings() {
       try {
         const snap = await getDocs(collection(db, 'bookings'));
-        const bookings = snap.docs.map(d => ({ ...d.data(), _id: d.id }))
+        allBookings = snap.docs.map(d => ({ ...d.data(), _id: d.id }))
           .sort((a, b) => (b.bookedAt?.seconds || 0) - (a.bookedAt?.seconds || 0));
+        renderBookings();
+      } catch (err) {
+        document.getElementById('bookings-container').innerHTML =
+          '<div class="no-results">Error loading bookings.</div>';
+        console.error(err);
+      }
+    }
 
-        if (bookings.length === 0) {
-          document.getElementById('bookings-container').innerHTML =
-            '<div class="no-results">No booking records yet.</div>';
-          return;
-        }
+    function renderBookings() {
+      if (allBookings.length === 0) {
+        document.getElementById('bookings-container').innerHTML =
+          '<div class="no-results">No booking records yet.</div>';
+        return;
+      }
 
-        let html = `<table><thead><tr>
+      let html = `<table><thead><tr>
           <th>Asset ID</th>
           <th>Taken By</th>
           <th>Destination</th>
@@ -850,14 +861,14 @@
           <th>Returned</th>
         </tr></thead><tbody>`;
 
-        bookings.forEach(b => {
-          const bookedAt = b.bookedAt?.toDate
-            ? b.bookedAt.toDate().toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })
-            : '—';
-          const returnedAt = b.returnedAt?.toDate
-            ? b.returnedAt.toDate().toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })
-            : '<span style="background:#fff3cd;color:#856404;padding:2px 8px;border-radius:10px;font-size:0.78rem;font-weight:600;">🚗 Still Out</span>';
-          html += `<tr>
+      allBookings.forEach(b => {
+        const bookedAt = b.bookedAt?.toDate
+          ? b.bookedAt.toDate().toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })
+          : '—';
+        const returnedAt = b.returnedAt?.toDate
+          ? b.returnedAt.toDate().toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })
+          : '<span style="background:#fff3cd;color:#856404;padding:2px 8px;border-radius:10px;font-size:0.78rem;font-weight:600;">🚗 Still Out</span>';
+        html += `<tr>
             <td class="asset-id-cell"><a class="action-link" href="index.html?id=${b.assetId}">${b.assetId}</a></td>
             <td>${b.bookedBy || '—'}</td>
             <td>${b.destination || '—'}</td>
@@ -865,15 +876,10 @@
             <td class="date-cell">${bookedAt}</td>
             <td class="date-cell">${returnedAt}</td>
           </tr>`;
-        });
+      });
 
-        html += `</tbody></table>`;
-        document.getElementById('bookings-container').innerHTML = html;
-      } catch (err) {
-        document.getElementById('bookings-container').innerHTML =
-          '<div class="no-results">Error loading bookings.</div>';
-        console.error(err);
-      }
+      html += `</tbody></table>`;
+      document.getElementById('bookings-container').innerHTML = html;
     }
 
     window.exportBookingsCSV = async function () {
@@ -927,47 +933,41 @@
       }
     };
 
-    async function loadUsageChart() {
+    function loadUsageChart() {
       const el = document.getElementById('usage-chart');
       el.innerHTML = '<div class="loading"><span class="spinner"></span></div>';
-      try {
-        const snap = await getDocs(collection(db, 'bookings'));
-        const counts = {};
-        snap.docs.forEach(d => {
-          const id = d.data().assetId;
-          if (id) counts[id] = (counts[id] || 0) + 1;
-        });
+      const counts = {};
+      allBookings.forEach(b => {
+        const id = b.assetId;
+        if (id) counts[id] = (counts[id] || 0) + 1;
+      });
 
-        if (Object.keys(counts).length === 0) {
-          el.innerHTML = '<div class="no-results">No booking data yet.</div>';
-          return;
-        }
-
-        const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-        const max = sorted[0][1];
-
-        let html = '';
-        sorted.forEach(([id, count]) => {
-          const pct = Math.max(4, Math.round((count / max) * 100));
-          const desc = allAssets.find(a => a._id === id)?.description || '';
-          const label = desc ? `${id}` : id;
-          const sublabel = desc ? `<div style="font-size:0.7rem;color:#94a3b8;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:90px;">${desc}</div>` : '';
-          html += `
-            <div class="chart-bar-row">
-              <div class="chart-bar-label">${label}${sublabel}</div>
-              <div class="chart-bar-track">
-                <div class="chart-bar-fill" style="width:${pct}%">
-                  ${pct > 15 ? `<span class="chart-bar-val">${count} booking${count !== 1 ? 's' : ''}</span>` : ''}
-                </div>
-              </div>
-              ${pct <= 15 ? `<span class="chart-bar-val-outside">${count}</span>` : ''}
-            </div>`;
-        });
-        el.innerHTML = html;
-      } catch (err) {
-        el.innerHTML = '<div class="no-results">Error loading usage data.</div>';
-        console.error(err);
+      if (Object.keys(counts).length === 0) {
+        el.innerHTML = '<div class="no-results">No booking data yet.</div>';
+        return;
       }
+
+      const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+      const max = sorted[0][1];
+
+      let html = '';
+      sorted.forEach(([id, count]) => {
+        const pct = Math.max(4, Math.round((count / max) * 100));
+        const desc = allAssets.find(a => a._id === id)?.description || '';
+        const label = desc ? `${id}` : id;
+        const sublabel = desc ? `<div style="font-size:0.7rem;color:#94a3b8;margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:90px;">${desc}</div>` : '';
+        html += `
+          <div class="chart-bar-row">
+            <div class="chart-bar-label">${label}${sublabel}</div>
+            <div class="chart-bar-track">
+              <div class="chart-bar-fill" style="width:${pct}%">
+                ${pct > 15 ? `<span class="chart-bar-val">${count} booking${count !== 1 ? 's' : ''}</span>` : ''}
+              </div>
+            </div>
+            ${pct <= 15 ? `<span class="chart-bar-val-outside">${count}</span>` : ''}
+          </div>`;
+      });
+      el.innerHTML = html;
     }
 
     let usageLoaded = false;

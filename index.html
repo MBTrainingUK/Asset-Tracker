@@ -491,13 +491,16 @@
     const db = getFirestore(app);
 
     let knownLocations = [];
+    let locationsLoaded = false;
 
     async function loadLocations() {
+      if (locationsLoaded) return;
       try {
         const snap = await getDocs(collection(db, 'assets'));
         const locs = new Set();
         snap.docs.forEach(d => { if (d.data().location) locs.add(d.data().location); });
         knownLocations = [...locs].sort();
+        locationsLoaded = true;
       } catch (e) { knownLocations = []; }
     }
 
@@ -728,6 +731,10 @@
 
         statusEl.textContent = '✅ Saved successfully!';
         statusEl.className = 'msg-success';
+
+        if (location && !knownLocations.includes(location)) {
+          knownLocations = [...knownLocations, location].sort();
+        }
 
         setTimeout(() => resetToLookup(), 1500);
 
