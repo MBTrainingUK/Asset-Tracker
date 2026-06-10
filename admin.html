@@ -705,7 +705,7 @@
         setTimeout(() => { authErr.textContent = ''; }, 5000);
       } catch (e) {
         errEl.textContent = e.code === 'auth/email-already-in-use'
-          ? 'That email is already registered. Try signing in.'
+          ? 'That email already has an account. Sign in, then ask an admin to grant you access from the Users tab.'
           : 'Something went wrong. Please try again.';
       }
     };
@@ -747,16 +747,13 @@
       if (user) {
         const adminDoc = await getDoc(doc(db, 'adminUsers', user.uid));
         if (!adminDoc.exists()) {
-          // Original console-created admin — auto-approve on first login
-          await setDoc(doc(db, 'adminUsers', user.uid), {
-            email: user.email,
-            name: user.email.split('@')[0],
-            status: 'approved',
-            approvedAt: serverTimestamp()
-          });
-          overlay.classList.remove('visible');
-          signoutBtn.style.display = 'block';
-          loadAssets();
+          // No admin record — not authorised, sign out and prompt to request access
+          await fbSignOut(auth);
+          overlay.classList.add('visible');
+          showAuthView('signin');
+          const authErr = document.getElementById('auth-error');
+          authErr.style.color = '#e63946';
+          authErr.textContent = 'You don\'t have admin access. Use "Request it here" to apply.';
         } else {
           const status = adminDoc.data().status;
           if (status === 'approved') {

@@ -6,19 +6,19 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Assets — public read, public create/update with validation, admin-only delete
+    // Assets — auth required for all access, admin-only delete
     match /assets/{assetId} {
-      allow read: if true;
-      allow create: if isAdmin() || validAssetWrite(request.resource.data);
-      allow update: if isAdmin() || validAssetWrite(request.resource.data);
+      allow read: if request.auth != null;
+      allow create: if isAdmin() || (request.auth != null && validAssetWrite(request.resource.data));
+      allow update: if isAdmin() || (request.auth != null && validAssetWrite(request.resource.data));
       allow delete: if isAdmin();
     }
 
-    // Bookings — public read/create/update with validation, never delete
+    // Bookings — auth required for all access, never delete
     match /bookings/{bookingId} {
-      allow read: if true;
-      allow create: if isAdmin() || validNewBooking(request.resource.data);
-      allow update: if isAdmin() || validBookingReturn(request.resource.data, resource.data);
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && validNewBooking(request.resource.data);
+      allow update: if isAdmin() || (request.auth != null && validBookingReturn(request.resource.data, resource.data));
       allow delete: if false;
     }
 
@@ -30,10 +30,10 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Audit log — admin-only read, public create with validation, no edits
+    // Audit log — admin-only read, any authenticated user can create, no edits
     match /auditLog/{logId} {
       allow read: if isAdmin();
-      allow create: if isAdmin() || validAuditEntry(request.resource.data);
+      allow create: if request.auth != null && validAuditEntry(request.resource.data);
       allow update, delete: if false;
     }
 

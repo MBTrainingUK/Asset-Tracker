@@ -10,6 +10,44 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
+    #scanner-auth-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #f4f6fb;
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+    }
+    #scanner-auth-overlay.visible { display: flex; }
+
+    .scanner-auth-box {
+      background: white;
+      border-radius: 20px;
+      padding: 40px 32px;
+      max-width: 360px;
+      width: calc(100% - 32px);
+      box-shadow: 0 4px 24px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    .scanner-auth-box h2 { font-size: 1.3rem; color: #1a1a2e; margin-bottom: 8px; font-family: 'Inter', sans-serif; }
+    .scanner-auth-box p  { font-size: 0.88rem; color: #888; margin-bottom: 24px; }
+    .scanner-auth-box input {
+      width: 100%; padding: 12px 14px; border: 1.5px solid #e0e0e0; border-radius: 10px;
+      font-size: 1rem; color: #1a1a2e; background: #fafafa; margin-bottom: 14px;
+      font-family: 'Inter', sans-serif;
+    }
+    .scanner-auth-box input:focus { outline: none; border-color: #4361ee; background: white; }
+    .scanner-auth-box input[type="password"] { text-align: center; letter-spacing: 0.15em; }
+    .scanner-auth-box button {
+      width: 100%; padding: 13px;
+      background: linear-gradient(135deg, #4361ee, #3a56d4);
+      color: white; border: none; border-radius: 10px;
+      font-size: 1rem; font-weight: 600; font-family: 'Inter', sans-serif; cursor: pointer;
+    }
+    .scanner-auth-box button:hover { opacity: 0.9; }
+    #scanner-auth-error { margin-top: 14px; font-size: 0.88rem; color: #e63946; min-height: 20px; }
+
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
       background: #f4f6fb;
@@ -376,12 +414,27 @@
 </head>
 <body>
 
+  <div id="scanner-auth-overlay" class="visible">
+    <div class="scanner-auth-box">
+      <div style="font-size:1.8rem;margin-bottom:12px;">📦</div>
+      <h2>Asset Tracker</h2>
+      <p>Sign in to continue</p>
+      <input type="email" id="scanner-auth-email" placeholder="Email" autocomplete="email" />
+      <input type="password" id="scanner-auth-password" placeholder="Password" autocomplete="current-password" />
+      <button onclick="scannerSignIn()">Sign In</button>
+      <div id="scanner-auth-error"></div>
+    </div>
+  </div>
+
   <header>
     <div class="header-brand">
       <div class="header-icon">📦</div>
       <h1>Asset Tracker</h1>
     </div>
-    <a href="admin.html">Admin →</a>
+    <div style="display:flex;align-items:center;gap:14px;">
+      <a href="admin.html">Admin →</a>
+      <button id="btn-scanner-signout" onclick="scannerSignOut()" style="display:none;padding:6px 14px;font-size:0.82rem;background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.8);border:1px solid rgba(255,255,255,0.25);border-radius:8px;font-family:'Inter',sans-serif;font-weight:500;cursor:pointer;width:auto;">Sign Out</button>
+    </div>
   </header>
 
   <div class="card" id="lookup-section">
@@ -477,10 +530,51 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
     import { getFirestore, doc, getDoc, setDoc, addDoc, updateDoc, serverTimestamp, collection, getDocs }
       from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+    import { getAuth, signInWithEmailAndPassword, onAuthStateChanged, signOut as fbSignOut }
+      from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
     import { firebaseConfig } from './firebase-config.js';
 
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    window.scannerSignIn = async function () {
+      const email = document.getElementById('scanner-auth-email').value.trim();
+      const password = document.getElementById('scanner-auth-password').value;
+      const errEl = document.getElementById('scanner-auth-error');
+      errEl.textContent = '';
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+      } catch (e) {
+        errEl.textContent = 'Incorrect email or password.';
+        document.getElementById('scanner-auth-password').value = '';
+        document.getElementById('scanner-auth-password').focus();
+        setTimeout(() => { errEl.textContent = ''; }, 3000);
+      }
+    };
+
+    window.scannerSignOut = async function () {
+      await fbSignOut(auth);
+    };
+
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && document.getElementById('scanner-auth-overlay').classList.contains('visible')) {
+        window.scannerSignIn();
+      }
+    });
+
+    onAuthStateChanged(auth, user => {
+      const overlay = document.getElementById('scanner-auth-overlay');
+      const signoutBtn = document.getElementById('btn-scanner-signout');
+      if (user) {
+        overlay.classList.remove('visible');
+        signoutBtn.style.display = 'block';
+      } else {
+        overlay.classList.add('visible');
+        signoutBtn.style.display = 'none';
+        setTimeout(() => document.getElementById('scanner-auth-email').focus(), 100);
+      }
+    });
 
     let knownLocations = [];
     let locationsLoaded = false;
