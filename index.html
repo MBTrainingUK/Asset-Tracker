@@ -657,6 +657,9 @@
       }
     });
 
+    let authReadyResolve;
+    const authReady = new Promise(resolve => { authReadyResolve = resolve; });
+
     onAuthStateChanged(auth, async user => {
       const overlay = document.getElementById('scanner-auth-overlay');
       const signoutBtn = document.getElementById('btn-scanner-signout');
@@ -666,21 +669,25 @@
           await fbSignOut(auth);
           overlay.classList.add('visible');
           showScannerAuthView('signin');
+          authReadyResolve(false);
         } else {
           const { status } = userDoc.data();
           if (status === 'approved') {
             overlay.classList.remove('visible');
             signoutBtn.style.display = 'block';
+            authReadyResolve(true);
           } else {
             overlay.classList.add('visible');
             signoutBtn.style.display = 'none';
             showScannerAuthView(status === 'pending' ? 'pending' : 'declined');
+            authReadyResolve(false);
           }
         }
       } else {
         overlay.classList.add('visible');
         signoutBtn.style.display = 'none';
         showScannerAuthView('signin');
+        authReadyResolve(false);
       }
     });
 
@@ -1126,7 +1133,7 @@
     const urlId = urlParams.get('id');
     if (urlId) {
       document.getElementById('asset-id-input').value = urlId;
-      setTimeout(() => window.lookupAsset(), 100);
+      authReady.then(approved => { if (approved) window.lookupAsset(); });
     }
   </script>
 
