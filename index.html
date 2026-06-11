@@ -937,7 +937,7 @@
           await addDoc(collection(db, 'auditLog'), {
             action: 'asset_edited',
             assetId: currentId,
-            performedBy: 'Scanner',
+            performedBy: auth.currentUser.email,
             timestamp: serverTimestamp()
           });
         }
@@ -1057,7 +1057,7 @@
         await addDoc(collection(db, 'auditLog'), {
           action: 'asset_booked_out',
           assetId: currentId,
-          performedBy: bookedBy,
+          performedBy: auth.currentUser.email,
           timestamp: serverTimestamp()
         });
 
@@ -1103,7 +1103,7 @@
         await addDoc(collection(db, 'auditLog'), {
           action: 'asset_returned',
           assetId: currentId,
-          performedBy: 'Scanner',
+          performedBy: auth.currentUser.email,
           timestamp: serverTimestamp()
         });
 
