@@ -12,6 +12,14 @@
       "**/.*",
       "**/node_modules/**",
       "Danger folder/**"
+    ],
+    "headers": [
+      {
+        "source": "**/*.@(html|js)",
+        "headers": [
+          { "key": "Cache-Control", "value": "no-cache" }
+        ]
+      }
     ]
   }
 }
