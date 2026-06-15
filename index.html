@@ -419,10 +419,10 @@
 <body>
 
   <div id="scanner-auth-overlay" class="visible">
-    <div class="scanner-auth-box">
+    <div class="scanner-auth-box" id="scanner-auth-box-inner" style="display:none;">
 
       <!-- Sign In -->
-      <div id="scanner-view-signin">
+      <div id="scanner-view-signin" style="display:none;">
         <div style="font-size:1.8rem;margin-bottom:12px;">📦</div>
         <h2>Asset Tracker</h2>
         <p>Sign in to continue</p>
@@ -579,6 +579,7 @@
     const auth = getAuth(app);
 
     window.showScannerAuthView = function (view) {
+      document.getElementById('scanner-auth-box-inner').style.display = 'block';
       ['signin', 'request', 'pending', 'declined'].forEach(v => {
         document.getElementById('scanner-view-' + v).style.display = v === view ? 'block' : 'none';
       });

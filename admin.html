@@ -415,10 +415,10 @@
 
   <!-- AUTH GATE -->
   <div id="auth-overlay" class="visible">
-    <div class="auth-box">
+    <div class="auth-box" id="auth-box-inner" style="display:none;">
 
       <!-- Sign In -->
-      <div id="auth-view-signin">
+      <div id="auth-view-signin" style="display:none;">
         <div class="auth-notice">📦</div>
         <h2>Admin Access</h2>
         <p>Sign in to continue</p>
@@ -669,6 +669,7 @@
     const auth = getAuth(app);
 
     window.showAuthView = function showAuthView(view) {
+      document.getElementById('auth-box-inner').style.display = 'block';
       ['signin', 'request', 'pending', 'declined', 'limited'].forEach(v => {
         document.getElementById('auth-view-' + v).style.display = v === view ? 'block' : 'none';
       });
