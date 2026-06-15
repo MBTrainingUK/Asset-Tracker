@@ -902,9 +902,13 @@
           ? asset.updatedAt.toDate().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
           : '—';
 
-        const statusHtml = asset.status === 'out'
-          ? '<span style="background:#fff3cd;color:#856404;padding:3px 10px;border-radius:12px;font-size:0.78rem;font-weight:600;">🚗 Off-Site</span>'
-          : '<span style="background:#d1e7dd;color:#0a5c36;padding:3px 10px;border-radius:12px;font-size:0.78rem;font-weight:600;">📍 On-Site</span>';
+        const isBox = asset.type === 'box';
+
+        const statusHtml = isBox
+          ? '<span style="background:#ede9fe;color:#5b21b6;padding:3px 10px;border-radius:12px;font-size:0.78rem;font-weight:600;">🗂 Box</span>'
+          : asset.status === 'out'
+            ? '<span style="background:#fff3cd;color:#856404;padding:3px 10px;border-radius:12px;font-size:0.78rem;font-weight:600;">🚗 Off-Site</span>'
+            : '<span style="background:#d1e7dd;color:#0a5c36;padding:3px 10px;border-radius:12px;font-size:0.78rem;font-weight:600;">📍 On-Site</span>';
 
         const conditionHtmlMap = {
           good: '<span class="cond-good">✅ Good</span>',
@@ -913,15 +917,21 @@
         };
         const conditionHtml = conditionHtmlMap[asset.condition || 'good'] || conditionHtmlMap.good;
 
+        const descCell = isBox
+          ? `<span style="color:#5b21b6;font-weight:600;">${asset.name || '—'}</span>`
+          : (asset.description || '—');
+
         const removeBtn = dangerMode ? `<button class="btn-inline-remove" onclick="removeAsset('${asset._id}', this)">🗑</button>` : '';
-        const actionCell = asset.status === 'out' && asset.currentBookingId
+        const actionCell = !isBox && asset.status === 'out' && asset.currentBookingId
           ? `<div class="action-cell"><button class="btn-inline-return" onclick="returnAssetFromAdmin('${asset._id}', '${asset.currentBookingId}', this)">📥 Return</button>${removeBtn}</div>`
           : `<div class="action-cell"><a class="action-link" href="index.html?id=${asset._id}">View →</a>${removeBtn}</div>`;
 
         html += `<tr>
           <td class="asset-id-cell">${asset._id}</td>
           <td>${asset.location || '—'}</td>
-          <td class="desc-cell">${asset.description || '—'}</td>          <td style="font-family:monospace;font-size:0.85rem;color:#475569;">${asset.partNo || '\u2014'}</td>          <td>${conditionHtml}</td>
+          <td class="desc-cell">${descCell}</td>
+          <td style="font-family:monospace;font-size:0.85rem;color:#475569;">${asset.partNo || '—'}</td>
+          <td>${conditionHtml}</td>
           <td>${statusHtml}</td>
           <td class="date-cell">${updatedAt}</td>
           <td>${actionCell}</td>
