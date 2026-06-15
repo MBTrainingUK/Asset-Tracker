@@ -548,6 +548,14 @@
         <option value="damaged">🔴 Damaged</option>
       </select>
     </div>
+    <div class="filter-group" style="max-width:150px;">
+      <label for="filter-type">Type</label>
+      <select id="filter-type">
+        <option value="">All</option>
+        <option value="asset">📦 Assets</option>
+        <option value="box">🗂 Boxes</option>
+      </select>
+    </div>
     <button class="btn-reset" onclick="resetFilters()">Reset</button>
   </div>
 
@@ -832,18 +840,22 @@
       const location = document.getElementById('filter-location').value;
       const status = document.getElementById('filter-status').value;
       const condition = document.getElementById('filter-condition').value;
+      const type = document.getElementById('filter-type').value;
 
       return allAssets.filter(a => {
         const matchSearch = !search ||
           (a._id || '').toLowerCase().includes(search) ||
           (a.description || '').toLowerCase().includes(search) ||
+          (a.name || '').toLowerCase().includes(search) ||
           (a.partNo || '').toLowerCase().includes(search);
         const matchLocation = !location || a.location === location;
         const assetStatus = a.status === 'out' ? 'out' : 'in';
-        const matchStatus = !status || assetStatus === status;
+        const matchStatus = !status || (a.type !== 'box' && assetStatus === status);
         const assetCondition = a.condition || 'good';
         const matchCondition = !condition || assetCondition === condition;
-        return matchSearch && matchLocation && matchStatus && matchCondition;
+        const assetType = a.type === 'box' ? 'box' : 'asset';
+        const matchType = !type || assetType === type;
+        return matchSearch && matchLocation && matchStatus && matchCondition && matchType;
       });
     }
 
@@ -957,6 +969,7 @@
       document.getElementById('filter-location').value = '';
       document.getElementById('filter-status').value = '';
       document.getElementById('filter-condition').value = '';
+      document.getElementById('filter-type').value = '';
       renderTable();
     };
 
@@ -1097,6 +1110,7 @@
     document.getElementById('filter-location').addEventListener('change', renderTable);
     document.getElementById('filter-status').addEventListener('change', renderTable);
     document.getElementById('filter-condition').addEventListener('change', renderTable);
+    document.getElementById('filter-type').addEventListener('change', renderTable);
 
     window.removeAsset = async function (assetId, btn) {
       const asset = allAssets.find(a => a._id === assetId);
