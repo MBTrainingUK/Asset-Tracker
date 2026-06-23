@@ -847,7 +847,8 @@
           (a._id || '').toLowerCase().includes(search) ||
           (a.description || '').toLowerCase().includes(search) ||
           (a.name || '').toLowerCase().includes(search) ||
-          (a.partNo || '').toLowerCase().includes(search);
+          (a.partNo || '').toLowerCase().includes(search) ||
+          (a.untaggedItems || []).some(item => (item.name || '').toLowerCase().includes(search));
         const matchLocation = !location || a.location === location;
         const assetStatus = a.status === 'out' ? 'out' : 'in';
         const matchStatus = !status || (a.type !== 'box' && assetStatus === status);
@@ -929,8 +930,19 @@
         };
         const conditionHtml = conditionHtmlMap[asset.condition || 'good'] || conditionHtmlMap.good;
 
+        const activeSearch = document.getElementById('filter-search').value.toLowerCase().trim();
+        const untagged = asset.untaggedItems || [];
+        const matchingUntagged = activeSearch
+          ? untagged.filter(item => (item.name || '').toLowerCase().includes(activeSearch))
+          : untagged;
         const descCell = isBox
-          ? `<span style="color:#5b21b6;font-weight:600;">${asset.name || '—'}</span>`
+          ? `<span style="color:#5b21b6;font-weight:600;">${asset.name || '—'}</span>${
+              activeSearch && matchingUntagged.length > 0
+                ? `<br><span style="font-size:0.78rem;color:#64748b;">${matchingUntagged.map(i => `${i.name} ×${i.qty}`).join(', ')}</span>`
+                : !activeSearch && untagged.length > 0
+                  ? `<span style="font-size:0.78rem;color:#94a3b8;"> · ${untagged.length} untagged item${untagged.length !== 1 ? 's' : ''}</span>`
+                  : ''
+            }`
           : (asset.description || '—');
 
         const removeBtn = dangerMode ? `<button class="btn-inline-remove" onclick="removeAsset('${asset._id}', this)">🗑</button>` : '';
