@@ -494,10 +494,6 @@
       <div class="stat-label">Tagged Assets</div>
     </div>
     <div class="stat-card">
-      <div class="stat-num" id="stat-untagged">—</div>
-      <div class="stat-label">Untagged Items</div>
-    </div>
-    <div class="stat-card">
       <div class="stat-num" id="stat-locations">—</div>
       <div class="stat-label">Locations</div>
     </div>
@@ -829,13 +825,12 @@
           sel.appendChild(opt);
         });
 
-        document.getElementById('stat-total').textContent = allAssets.length;
         const taggedCount = allAssets.filter(a => a.type !== 'box').length;
         const untaggedCount = allAssets
           .filter(a => a.type === 'box')
           .reduce((sum, box) => sum + (box.untaggedItems || []).reduce((s, i) => s + (i.qty || 0), 0), 0);
+        document.getElementById('stat-total').textContent = taggedCount + untaggedCount;
         document.getElementById('stat-tagged').textContent = taggedCount;
-        document.getElementById('stat-untagged').textContent = untaggedCount;
         document.getElementById('stat-locations').textContent = locations.length;
         document.getElementById('stat-offsite').textContent = allAssets.filter(a => a.status === 'out').length;
         document.getElementById('stat-condition').textContent = allAssets.filter(a => a.condition === 'attention' || a.condition === 'damaged').length;
