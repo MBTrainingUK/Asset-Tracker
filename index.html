@@ -504,14 +504,13 @@
       <div id="qr-reader"></div>
       <button id="btn-stop-scan" onclick="stopScan()">✕ Cancel Scan</button>
     </div>
-    <label for="asset-id-input">Or enter manually</label>
+    <label for="asset-id-input">Or enter asset number / item name</label>
     <input
       type="text"
       id="asset-id-input"
-      placeholder="e.g. 000001"
-      maxlength="20"
+      placeholder="e.g. 000001 or bandage"
+      maxlength="60"
       autocomplete="off"
-      inputmode="numeric"
     />
     <button class="btn-primary" onclick="lookupAsset()">Search</button>
     <div id="lookup-status" style="margin-top:12px; font-size:0.9rem; text-align:center; color:#e63946;"></div>
@@ -667,6 +666,13 @@
       <div id="box-status-msg" style="margin-top:14px; font-size:0.88rem; text-align:center; min-height:22px;"></div>
     </div>
 
+  </div>
+
+  <!-- Untagged / text search results -->
+  <div class="card" id="untagged-results-section" style="display:none;">
+    <h2 id="untagged-results-title">Search Results</h2>
+    <div id="untagged-results-list"></div>
+    <button class="btn-secondary" style="margin-top:16px;" onclick="resetToLookup()">← Search Again</button>
   </div>
 
   <!-- Firebase SDK -->
@@ -906,7 +912,7 @@
       const statusEl = document.getElementById('lookup-status');
 
       if (!raw) {
-        statusEl.textContent = 'Please enter an asset number.';
+        statusEl.textContent = 'Please enter an asset number or item name.';
         return;
       }
 
@@ -916,24 +922,34 @@
         const assetRef = doc(db, 'assets', raw);
         const snap = await getDoc(assetRef);
 
-        currentId = raw;
-        document.getElementById('lookup-section').style.display = 'none';
-        document.getElementById('asset-section').style.display = 'block';
-        document.getElementById('display-id').textContent = raw;
-        document.getElementById('edit-display-id').textContent = raw;
-        statusEl.textContent = '';
-
         if (snap.exists() && !snap.data().deleted) {
           const data = snap.data();
           isNewAsset = false;
 
+          currentId = raw;
+          document.getElementById('lookup-section').style.display = 'none';
+          document.getElementById('asset-section').style.display = 'block';
+          document.getElementById('display-id').textContent = raw;
+          document.getElementById('edit-display-id').textContent = raw;
+          statusEl.textContent = '';
+
           if (data.type === 'box') {
             showBoxSection(raw, data);
-            statusEl.textContent = '';
             return;
           }
 
           currentAssetData = data;
+
+          // If the asset lives in a box, fetch the box details to show alongside
+          let boxInfo = null;
+          if (data.boxId) {
+            try {
+              const boxSnap = await getDoc(doc(db, 'assets', data.boxId));
+              if (boxSnap.exists() && !boxSnap.data().deleted) {
+                boxInfo = { id: data.boxId, ...boxSnap.data() };
+              }
+            } catch(e) { /* ignore */ }
+          }
 
           document.getElementById('asset-badge').textContent = '✅ Registered';
           document.getElementById('asset-badge').className = 'badge badge-found';
@@ -952,6 +968,13 @@
               <span class="detail-label">Location</span>
               <span class="detail-value">${data.location || '—'}</span>
             </div>
+            ${boxInfo ? `<div class="detail-row">
+              <span class="detail-label">Stored In</span>
+              <span class="detail-value">
+                <span style="font-weight:700;">${boxInfo.name || 'Unnamed Box'}</span>
+                <span style="font-size:0.82rem;color:#64748b;display:block;">Box <span style="font-family:monospace;color:#4361ee;">${boxInfo.id}</span>${data.relationship === 'adjacent' ? ' · stored next to box' : ' · stored inside box'}</span>
+              </span>
+            </div>` : ''}
             <div class="detail-row">
               <span class="detail-label">Description</span>
               <span class="detail-value">${data.description || '—'}</span>
@@ -977,6 +1000,26 @@
           document.getElementById('edit-mode').style.display = 'none';
 
         } else {
+          // Nothing found — decide between text search and new-asset registration
+          const isNumericId = /^\d+$/.test(raw);
+
+          if (!isNumericId) {
+            // Text search — scan all boxes for matching untagged items
+            statusEl.innerHTML = '<span class="spinner"></span> Searching boxes…';
+            const results = await searchUntaggedItems(raw);
+            statusEl.textContent = '';
+            showUntaggedResults(raw, results);
+            return;
+          }
+
+          // Numeric ID not found — offer to register as new asset
+          currentId = raw;
+          document.getElementById('lookup-section').style.display = 'none';
+          document.getElementById('asset-section').style.display = 'block';
+          document.getElementById('display-id').textContent = raw;
+          document.getElementById('edit-display-id').textContent = raw;
+          statusEl.textContent = '';
+
           isNewAsset = true;
           document.getElementById('edit-badge').textContent = '🆕 New Asset';
           document.getElementById('edit-badge').className = 'badge badge-new';
@@ -1098,6 +1141,7 @@
       document.getElementById('lookup-section').style.display = 'block';
       document.getElementById('asset-section').style.display = 'none';
       document.getElementById('box-section').style.display = 'none';
+      document.getElementById('untagged-results-section').style.display = 'none';
     };
 
     async function loadActiveBooking(bookingId) {
@@ -1569,6 +1613,59 @@
     window.removeUntaggedItem = function(i) {
       editingUntaggedItems.splice(i, 1);
       renderUntaggedItemsEdit();
+    };
+
+    // ── Untagged item text search ──
+    async function searchUntaggedItems(term) {
+      const lowerTerm = term.toLowerCase();
+      const q = query(collection(db, 'assets'), where('type', '==', 'box'));
+      const snap = await getDocs(q);
+      const results = [];
+      snap.docs.forEach(d => {
+        if (d.data().deleted) return;
+        const box = { id: d.id, ...d.data() };
+        const matches = (box.untaggedItems || []).filter(item =>
+          item.name.toLowerCase().includes(lowerTerm)
+        );
+        if (matches.length > 0) results.push({ box, matches });
+      });
+      return results;
+    }
+
+    function showUntaggedResults(term, results) {
+      document.getElementById('lookup-section').style.display = 'none';
+      document.getElementById('asset-section').style.display = 'none';
+      document.getElementById('box-section').style.display = 'none';
+      document.getElementById('untagged-results-section').style.display = 'block';
+      document.getElementById('untagged-results-title').textContent = `Results for "${term}"`;
+      const listEl = document.getElementById('untagged-results-list');
+      if (results.length === 0) {
+        listEl.innerHTML = '<div style="text-align:center;padding:20px 0;color:#94a3b8;font-size:0.9rem;">No matching items found in any box.</div>';
+        return;
+      }
+      let html = '';
+      results.forEach(({ box, matches }) => {
+        html += `
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:12px;">
+            <div class="detail-label" style="margin-bottom:4px;">Found in Box</div>
+            <div style="font-weight:700;color:#0f172a;font-size:1rem;margin-bottom:2px;">${box.name || 'Unnamed Box'}</div>
+            <div style="font-size:0.82rem;color:#64748b;margin-bottom:10px;">📍 ${box.location || '—'} &nbsp;·&nbsp; <span style="font-family:monospace;color:#4361ee;">${box.id}</span></div>
+            <div style="border-top:1px solid #e2e8f0;padding-top:8px;">
+              ${matches.map(item => `<div class="box-item-row" style="padding:5px 0;">
+                <span style="font-size:0.9rem;color:#0f172a;">${item.name}</span>
+                <span class="box-item-qty">× ${item.qty}</span>
+              </div>`).join('')}
+            </div>
+            <button class="btn-secondary" style="margin-top:12px;font-size:0.85rem;padding:9px;" onclick="window.lookupBoxById('${box.id}')">View Box →</button>
+          </div>
+        `;
+      });
+      listEl.innerHTML = html;
+    }
+
+    window.lookupBoxById = function(boxId) {
+      document.getElementById('asset-id-input').value = boxId;
+      window.lookupAsset();
     };
 
     // Allow pressing Enter to search
