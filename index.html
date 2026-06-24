@@ -490,6 +490,19 @@
     }
     .rfb-new-loc-input:focus { outline: none; border-color: #4361ee; }
     .rfb-modal-error { font-size: 0.85rem; color: #e63946; margin-bottom: 8px; min-height: 20px; }
+
+    /* ── Untagged-item remove modal ── */
+    #untagged-remove-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 10001;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    #untagged-remove-modal.visible { display: flex; }
   </style>
 </head>
 <body>
@@ -759,6 +772,38 @@
         <div class="rfb-modal-btns">
           <button class="rfb-btn-move" onclick="rfbConfirmMove()">✓ Confirm Move</button>
           <button class="rfb-btn-cancel" onclick="rfbBackToStep1()">← Back</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Untagged-item remove modal -->
+  <div id="untagged-remove-modal">
+    <div class="rfb-modal-box">
+
+      <!-- Step 1: choose action -->
+      <div id="urm-step-1">
+        <div class="rfb-modal-title">Remove Item</div>
+        <div class="rfb-modal-subtitle" id="urm-item-label">Item —</div>
+        <div class="rfb-modal-btns">
+          <button class="rfb-btn-move" onclick="urmChooseMove()">📦 Move to another box</button>
+          <button class="rfb-btn-delete" onclick="urmChooseDelete()">🗑 Delete item</button>
+          <button class="rfb-btn-cancel" onclick="urmCloseModal()">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Step 2: pick box -->
+      <div id="urm-step-2" style="display:none;">
+        <div class="rfb-modal-title">Move to box…</div>
+        <div class="rfb-modal-subtitle" id="urm-item-label-2">Item —</div>
+        <select class="rfb-modal-select" id="urm-box-select">
+          <option value="" disabled selected>Select a box…</option>
+        </select>
+        <div class="rfb-modal-error" id="urm-error"></div>
+        <div class="rfb-modal-btns">
+          <button class="rfb-btn-move" onclick="urmConfirmMove()">✓ Confirm Move</button>
+          <button class="rfb-btn-cancel" onclick="urmBackToStep1()">← Back</button>
         </div>
       </div>
 
@@ -1777,9 +1822,92 @@
       document.getElementById('input-untagged-name').focus();
     };
 
+    // ── Untagged-item remove modal ──
+    let _urmIndex = null;
+
     window.removeUntaggedItem = function(i) {
-      editingUntaggedItems.splice(i, 1);
+      _urmIndex = i;
+      const item = editingUntaggedItems[i];
+      document.getElementById('urm-item-label').textContent = `What would you like to do with "${item.name}" × ${item.qty}?`;
+      document.getElementById('urm-item-label-2').textContent = `Moving “${item.name}” × ${item.qty}`;
+      document.getElementById('urm-step-1').style.display = 'block';
+      document.getElementById('urm-step-2').style.display = 'none';
+      document.getElementById('urm-error').textContent = '';
+      document.getElementById('untagged-remove-modal').classList.add('visible');
+    };
+
+    window.urmCloseModal = function() {
+      document.getElementById('untagged-remove-modal').classList.remove('visible');
+      _urmIndex = null;
+    };
+
+    window.urmChooseDelete = function() {
+      if (_urmIndex === null) return;
+      const item = editingUntaggedItems[_urmIndex];
+      if (!confirm(`Delete “${item.name}” from this box?`)) return;
+      editingUntaggedItems.splice(_urmIndex, 1);
       renderUntaggedItemsEdit();
+      urmCloseModal();
+    };
+
+    window.urmChooseMove = async function() {
+      const sel = document.getElementById('urm-box-select');
+      sel.innerHTML = '<option value="" disabled selected>Loading boxes…</option>';
+      document.getElementById('urm-step-1').style.display = 'none';
+      document.getElementById('urm-step-2').style.display = 'block';
+      document.getElementById('urm-error').textContent = '';
+      try {
+        const snap = await getDocs(query(collection(db, 'assets'), where('type', '==', 'box')));
+        sel.innerHTML = '<option value="" disabled selected>Select a box…</option>';
+        snap.docs.forEach(d => {
+          if (d.data().deleted || d.id === currentBoxId) return;
+          const opt = document.createElement('option');
+          opt.value = d.id;
+          opt.textContent = `${d.id} — ${d.data().name || 'Unnamed'}`;
+          sel.appendChild(opt);
+        });
+        if (sel.options.length === 1) {
+          sel.innerHTML = '<option value="" disabled selected>No other boxes found</option>';
+        }
+      } catch(e) {
+        sel.innerHTML = '<option value="" disabled selected>Error loading boxes</option>';
+        console.error(e);
+      }
+    };
+
+    window.urmBackToStep1 = function() {
+      document.getElementById('urm-step-2').style.display = 'none';
+      document.getElementById('urm-step-1').style.display = 'block';
+    };
+
+    window.urmConfirmMove = async function() {
+      if (_urmIndex === null) return;
+      const sel = document.getElementById('urm-box-select');
+      const errEl = document.getElementById('urm-error');
+      const targetBoxId = sel.value;
+      if (!targetBoxId) { errEl.textContent = 'Please select a box.'; return; }
+      errEl.textContent = '';
+      const item = editingUntaggedItems[_urmIndex];
+      try {
+        const targetSnap = await getDoc(doc(db, 'assets', targetBoxId));
+        if (!targetSnap.exists()) { errEl.textContent = 'Target box not found.'; return; }
+        const existing = targetSnap.data().untaggedItems || [];
+        const match = existing.find(it => it.name.toLowerCase() === item.name.toLowerCase());
+        let updated;
+        if (match) {
+          updated = existing.map(it =>
+            it.name.toLowerCase() === item.name.toLowerCase()
+              ? { ...it, qty: it.qty + item.qty }
+              : it
+          );
+        } else {
+          updated = [...existing, { name: item.name, qty: item.qty }];
+        }
+        await updateDoc(doc(db, 'assets', targetBoxId), { untaggedItems: updated, updatedAt: serverTimestamp() });
+        editingUntaggedItems.splice(_urmIndex, 1);
+        renderUntaggedItemsEdit();
+        urmCloseModal();
+      } catch(e) { errEl.textContent = 'Error moving item. Please try again.'; console.error(e); }
     };
 
     // ── Untagged item text search ──
