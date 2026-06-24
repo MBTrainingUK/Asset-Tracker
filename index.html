@@ -434,6 +434,62 @@
     .box-item-row:last-child { border-bottom: none; }
     .box-item-qty { color: #64748b; font-weight: 600; font-size: 0.85rem; }
     .untagged-edit-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+
+    /* ── Remove-from-box modal ── */
+    #remove-from-box-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 10000;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    #remove-from-box-modal.visible { display: flex; }
+    .rfb-modal-box {
+      background: white;
+      border-radius: 20px;
+      padding: 28px 24px 24px;
+      max-width: 360px;
+      width: 100%;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+      font-family: 'Inter', sans-serif;
+    }
+    .rfb-modal-title { font-size: 1.05rem; font-weight: 700; color: #1a1a2e; margin-bottom: 6px; }
+    .rfb-modal-subtitle { font-size: 0.85rem; color: #64748b; margin-bottom: 20px; }
+    .rfb-modal-btns { display: flex; flex-direction: column; gap: 10px; }
+    .rfb-btn-move {
+      padding: 13px; background: linear-gradient(135deg, #4361ee, #3a56d4);
+      color: white; border: none; border-radius: 10px;
+      font-size: 0.95rem; font-weight: 600; font-family: 'Inter', sans-serif; cursor: pointer;
+    }
+    .rfb-btn-move:hover { opacity: 0.9; }
+    .rfb-btn-delete {
+      padding: 13px; background: #fff0f0; color: #e63946;
+      border: 1.5px solid #fecaca; border-radius: 10px;
+      font-size: 0.95rem; font-weight: 600; font-family: 'Inter', sans-serif; cursor: pointer;
+    }
+    .rfb-btn-delete:hover { background: #fee2e2; }
+    .rfb-btn-cancel {
+      padding: 11px; background: transparent; color: #94a3b8;
+      border: 1px solid #e2e8f0; border-radius: 10px;
+      font-size: 0.9rem; font-weight: 500; font-family: 'Inter', sans-serif; cursor: pointer;
+    }
+    .rfb-btn-cancel:hover { background: #f8fafc; }
+    .rfb-modal-select {
+      width: 100%; padding: 12px 14px; border: 1.5px solid #e0e0e0;
+      border-radius: 10px; font-size: 0.95rem; color: #1a1a2e;
+      background: #fafafa; font-family: 'Inter', sans-serif; margin-bottom: 10px;
+    }
+    .rfb-modal-select:focus { outline: none; border-color: #4361ee; }
+    .rfb-new-loc-input {
+      width: 100%; padding: 12px 14px; border: 1.5px solid #e0e0e0;
+      border-radius: 10px; font-size: 0.95rem; font-family: 'Inter', sans-serif;
+      margin-bottom: 10px; background: white; color: #1a1a2e;
+    }
+    .rfb-new-loc-input:focus { outline: none; border-color: #4361ee; }
+    .rfb-modal-error { font-size: 0.85rem; color: #e63946; margin-bottom: 8px; min-height: 20px; }
   </style>
 </head>
 <body>
@@ -673,6 +729,40 @@
     <h2 id="untagged-results-title">Search Results</h2>
     <div id="untagged-results-list"></div>
     <button class="btn-secondary" style="margin-top:16px;" onclick="resetToLookup()">← Search Again</button>
+  </div>
+
+  <!-- Remove-from-box modal -->
+  <div id="remove-from-box-modal">
+    <div class="rfb-modal-box">
+
+      <!-- Step 1: choose action -->
+      <div id="rfb-step-1">
+        <div class="rfb-modal-title">Remove from Box</div>
+        <div class="rfb-modal-subtitle" id="rfb-asset-label">Asset —</div>
+        <div class="rfb-modal-btns">
+          <button class="rfb-btn-move" onclick="rfbChooseMove()">📍 Move to another location</button>
+          <button class="rfb-btn-delete" onclick="rfbChooseDelete()">🗑 Delete asset</button>
+          <button class="rfb-btn-cancel" onclick="rfbCloseModal()">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Step 2: pick location -->
+      <div id="rfb-step-2" style="display:none;">
+        <div class="rfb-modal-title">Move to…</div>
+        <div class="rfb-modal-subtitle" id="rfb-asset-label-2">Asset —</div>
+        <select class="rfb-modal-select" id="rfb-location-select" onchange="rfbHandleLocChange(this)">
+          <option value="" disabled selected>Select a location…</option>
+        </select>
+        <input type="text" class="rfb-new-loc-input" id="rfb-new-loc-input"
+               placeholder="Type new location name…" style="display:none;" />
+        <div class="rfb-modal-error" id="rfb-error"></div>
+        <div class="rfb-modal-btns">
+          <button class="rfb-btn-move" onclick="rfbConfirmMove()">✓ Confirm Move</button>
+          <button class="rfb-btn-cancel" onclick="rfbBackToStep1()">← Back</button>
+        </div>
+      </div>
+
+    </div>
   </div>
 
   <!-- Firebase SDK -->
@@ -1495,13 +1585,90 @@
       }
     };
 
-    window.removeAssetFromBox = async function(assetId) {
-      if (!confirm(`Remove asset ${assetId} from this box?`)) return;
+    // ── Remove-from-box modal ──
+    let _rfbAssetId = null;
+
+    window.removeAssetFromBox = function(assetId) {
+      _rfbAssetId = assetId;
+      document.getElementById('rfb-asset-label').textContent = `What would you like to do with asset ${assetId}?`;
+      document.getElementById('rfb-asset-label-2').textContent = `Moving asset ${assetId}`;
+      document.getElementById('rfb-step-1').style.display = 'block';
+      document.getElementById('rfb-step-2').style.display = 'none';
+      document.getElementById('rfb-error').textContent = '';
+      document.getElementById('remove-from-box-modal').classList.add('visible');
+    };
+
+    window.rfbCloseModal = function() {
+      document.getElementById('remove-from-box-modal').classList.remove('visible');
+      _rfbAssetId = null;
+    };
+
+    window.rfbChooseMove = async function() {
+      await loadLocations();
+      const sel = document.getElementById('rfb-location-select');
+      sel.innerHTML = '<option value="" disabled selected>Select a location…</option>';
+      knownLocations.forEach(loc => {
+        const opt = document.createElement('option');
+        opt.value = loc; opt.textContent = loc;
+        sel.appendChild(opt);
+      });
+      const addOpt = document.createElement('option');
+      addOpt.value = '__new__'; addOpt.textContent = '＋ Add new location…';
+      sel.appendChild(addOpt);
+      sel.value = '';
+      document.getElementById('rfb-new-loc-input').style.display = 'none';
+      document.getElementById('rfb-new-loc-input').value = '';
+      document.getElementById('rfb-error').textContent = '';
+      document.getElementById('rfb-step-1').style.display = 'none';
+      document.getElementById('rfb-step-2').style.display = 'block';
+    };
+
+    window.rfbHandleLocChange = function(sel) {
+      const inp = document.getElementById('rfb-new-loc-input');
+      if (sel.value === '__new__') { inp.style.display = 'block'; inp.focus(); }
+      else { inp.style.display = 'none'; }
+    };
+
+    window.rfbBackToStep1 = function() {
+      document.getElementById('rfb-step-2').style.display = 'none';
+      document.getElementById('rfb-step-1').style.display = 'block';
+    };
+
+    window.rfbChooseDelete = async function() {
+      const assetId = _rfbAssetId;
+      if (!assetId) return;
+      if (!confirm(`Delete asset ${assetId}?\n\nIt will be marked as deleted and can be restored by an admin.`)) return;
+      rfbCloseModal();
       try {
-        await updateDoc(doc(db, 'assets', assetId), { boxId: deleteField(), relationship: deleteField(), updatedAt: serverTimestamp() });
+        await updateDoc(doc(db, 'assets', assetId), {
+          deleted: true, deletedAt: serverTimestamp(),
+          boxId: deleteField(), relationship: deleteField(), updatedAt: serverTimestamp()
+        });
         boxContentsAssets = boxContentsAssets.filter(a => a._id !== assetId);
         renderBoxContents();
-      } catch(e) { alert('Error removing asset. Please try again.'); console.error(e); }
+      } catch(e) { alert('Error deleting asset. Please try again.'); console.error(e); }
+    };
+
+    window.rfbConfirmMove = async function() {
+      const assetId = _rfbAssetId;
+      if (!assetId) return;
+      const sel = document.getElementById('rfb-location-select');
+      const errEl = document.getElementById('rfb-error');
+      const location = sel.value === '__new__'
+        ? document.getElementById('rfb-new-loc-input').value.trim()
+        : sel.value;
+      if (!location || location === '__new__') { errEl.textContent = 'Please select or enter a location.'; return; }
+      errEl.textContent = '';
+      try {
+        await updateDoc(doc(db, 'assets', assetId), {
+          boxId: deleteField(), relationship: deleteField(),
+          location, updatedAt: serverTimestamp()
+        });
+        if (!knownLocations.includes(location)) knownLocations = [...knownLocations, location].sort();
+        boxContentsAssets = boxContentsAssets.filter(a => a._id !== assetId);
+        renderBoxContents();
+        rfbCloseModal();
+      } catch(e) { errEl.textContent = 'Error moving asset. Please try again.'; console.error(e); }
     };
 
     window.enableBoxEdit = async function() {
