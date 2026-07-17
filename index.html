@@ -943,9 +943,7 @@
           }
         }
       } else {
-        overlay.classList.add('visible');
-        signoutBtn.style.display = 'none';
-        showScannerAuthView('signin');
+        window.location.replace('login.html');
         authReadyResolve(false);
       }
     });

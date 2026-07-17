@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Asset Tracker — Sign In</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f0f2f5;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .auth-box {
+      background: white;
+      border-radius: 16px;
+      padding: 40px 32px;
+      max-width: 360px;
+      width: 100%;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+
+    .auth-notice { font-size: 1.8rem; margin-bottom: 12px; }
+
+    .auth-box h2 {
+      font-size: 1.3rem;
+      color: #1a1a2e;
+      margin-bottom: 8px;
+    }
+
+    .auth-box p {
+      font-size: 0.88rem;
+      color: #888;
+      margin-bottom: 24px;
+    }
+
+    .auth-box input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 10px;
+      font-size: 1rem;
+      color: #1a1a2e;
+      background: #fafafa;
+      margin-bottom: 14px;
+      text-align: left;
+    }
+
+    .auth-box input[type="password"] {
+      text-align: center;
+      letter-spacing: 0.15em;
+    }
+
+    .auth-box input:focus {
+      outline: none;
+      border-color: #4361ee;
+      background: white;
+    }
+
+    .auth-box button {
+      width: 100%;
+      padding: 13px;
+      background: #4361ee;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .auth-box button:hover { opacity: 0.9; }
+    .auth-box button + button { margin-top: 10px; }
+
+    .auth-switch {
+      margin-top: 18px;
+      font-size: 0.85rem;
+      color: #888;
+    }
+    .auth-switch a { color: #4361ee; text-decoration: none; font-weight: 500; }
+    .auth-switch a:hover { text-decoration: underline; }
+
+    #auth-error, #req-error {
+      margin-top: 14px;
+      font-size: 0.88rem;
+      color: #e63946;
+      min-height: 20px;
+    }
+
+    .view { display: none; }
+    .view.active { display: block; }
+
+    .spinner {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+
+<div class="auth-box">
+
+  <!-- Sign In -->
+  <div id="view-signin" class="view active">
+    <div class="auth-notice">📦</div>
+    <h2>Asset Tracker</h2>
+    <p>Sign in to continue</p>
+    <input type="email" id="auth-email" placeholder="Email" autocomplete="email" />
+    <input type="password" id="auth-password" placeholder="Password" autocomplete="current-password" />
+    <button id="btn-signin" onclick="signIn()">Sign In</button>
+    <div id="auth-error"></div>
+    <p class="auth-switch">Need access? <a href="#" onclick="showView('request'); return false;">Request it here</a></p>
+  </div>
+
+  <!-- Request Access -->
+  <div id="view-request" class="view">
+    <div class="auth-notice">✋</div>
+    <h2>Request Access</h2>
+    <p>An admin will review your request</p>
+    <input type="text" id="req-name" placeholder="Your name" autocomplete="name" />
+    <input type="email" id="req-email" placeholder="Email" autocomplete="email" />
+    <input type="password" id="req-password" placeholder="Password (min 6 chars)" autocomplete="new-password" />
+    <button onclick="requestAccess()">Submit Request</button>
+    <div id="req-error"></div>
+    <p class="auth-switch"><a href="#" onclick="showView('signin'); return false;">← Back to Sign In</a></p>
+  </div>
+
+  <!-- Pending -->
+  <div id="view-pending" class="view">
+    <div class="auth-notice">⏳</div>
+    <h2>Request Pending</h2>
+    <p>Your request is awaiting approval from an admin. Check back soon.</p>
+    <button onclick="doSignOut()" style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;">Sign Out</button>
+  </div>
+
+  <!-- Declined -->
+  <div id="view-declined" class="view">
+    <div class="auth-notice">✕</div>
+    <h2>Access Declined</h2>
+    <p>Your request was declined. You can submit a new request for an admin to review.</p>
+    <button onclick="reRequest()">Request Access Again</button>
+    <button onclick="doSignOut()" style="background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;">Cancel</button>
+  </div>
+
+  <!-- Redirecting -->
+  <div id="view-redirecting" class="view">
+    <div class="auth-notice">📦</div>
+    <h2>Asset Tracker</h2>
+    <p><span class="spinner"></span> Signing you in…</p>
+  </div>
+
+</div>
+
+<script type="module">
+  import { initializeApp }    from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+  import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteField, serverTimestamp }
+    from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword,
+           onAuthStateChanged, signOut as fbSignOut }
+    from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+  import { firebaseConfig } from './firebase-config.js';
+
+  const app  = initializeApp(firebaseConfig);
+  const db   = getFirestore(app);
+  const auth = getAuth(app);
+
+  window.showView = function(view) {
+    document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
+    document.getElementById('view-' + view).classList.add('active');
+    const focusMap = { signin: 'auth-email', request: 'req-name' };
+    if (focusMap[view]) setTimeout(() => document.getElementById(focusMap[view]).focus(), 100);
+  };
+
+  onAuthStateChanged(auth, async user => {
+    if (!user) {
+      showView('signin');
+      return;
+    }
+
+    showView('redirecting');
+
+    const snap = await getDoc(doc(db, 'adminUsers', user.uid));
+    if (!snap.exists()) {
+      await fbSignOut(auth);
+      showView('signin');
+      const err = document.getElementById('auth-error');
+      err.style.color = '#e63946';
+      err.textContent = 'You don\'t have access. Use "Request it here" to apply.';
+      return;
+    }
+
+    const data = snap.data();
+    const { status, role, tenantId, superAdmin } = data;
+
+    if (superAdmin === true) {
+      // Superadmin — go to admin panel; tenant resolver there will pick first tenant
+      window.location.replace('admin.html');
+      return;
+    }
+
+    if (status === 'approved' && tenantId) {
+      if (role === 'admin') {
+        window.location.replace(`admin.html?tenant=${tenantId}`);
+      } else {
+        // member — scanner
+        window.location.replace(`index.html?tenant=${tenantId}`);
+      }
+      return;
+    }
+
+    if (status === 'pending') { showView('pending'); return; }
+    if (status === 'declined') { showView('declined'); return; }
+
+    // Approved but no tenantId yet — account not fully set up
+    showView('signin');
+    const err = document.getElementById('auth-error');
+    err.style.color = '#e63946';
+    err.textContent = 'Your account is approved but hasn\'t been assigned a department yet. Contact an admin.';
+    await fbSignOut(auth);
+  });
+
+  window.signIn = async function() {
+    const email    = document.getElementById('auth-email').value.trim();
+    const password = document.getElementById('auth-password').value;
+    const errEl    = document.getElementById('auth-error');
+    const btn      = document.getElementById('btn-signin');
+    errEl.textContent = '';
+    btn.disabled = true;
+    btn.textContent = 'Signing in…';
+    try {
+      await signInWithEmailAndPassword(auth, email, password);
+      // onAuthStateChanged handles redirect
+    } catch (e) {
+      errEl.style.color = '#e63946';
+      errEl.textContent = 'Incorrect email or password.';
+      document.getElementById('auth-password').value = '';
+      document.getElementById('auth-password').focus();
+      setTimeout(() => { errEl.textContent = ''; }, 3000);
+      btn.disabled = false;
+      btn.textContent = 'Sign In';
+    }
+  };
+
+  window.requestAccess = async function() {
+    const name     = document.getElementById('req-name').value.trim();
+    const email    = document.getElementById('req-email').value.trim();
+    const password = document.getElementById('req-password').value;
+    const errEl    = document.getElementById('req-error');
+    errEl.textContent = '';
+    if (!name)              { errEl.textContent = 'Please enter your name.'; return; }
+    if (password.length < 6){ errEl.textContent = 'Password must be at least 6 characters.'; return; }
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      await setDoc(doc(db, 'adminUsers', cred.user.uid), {
+        email, name, status: 'pending', requestedAt: serverTimestamp()
+      });
+      await fbSignOut(auth);
+      showView('signin');
+      const authErr = document.getElementById('auth-error');
+      authErr.style.color = '#16a34a';
+      authErr.textContent = 'Request submitted — an admin will review it soon.';
+      setTimeout(() => { authErr.textContent = ''; }, 5000);
+    } catch (e) {
+      errEl.textContent = e.code === 'auth/email-already-in-use'
+        ? 'That email already has an account. Sign in, then ask an admin to grant you access.'
+        : 'Something went wrong. Please try again.';
+    }
+  };
+
+  window.reRequest = async function() {
+    try {
+      await updateDoc(doc(db, 'adminUsers', auth.currentUser.uid), {
+        status: 'pending', requestedAt: serverTimestamp(),
+        declinedAt: deleteField(), declinedBy: deleteField()
+      });
+      await fbSignOut(auth);
+      showView('signin');
+      const authErr = document.getElementById('auth-error');
+      authErr.style.color = '#16a34a';
+      authErr.textContent = 'Request re-submitted — an admin will review it soon.';
+      setTimeout(() => { authErr.textContent = ''; }, 5000);
+    } catch (e) { console.error(e); }
+  };
+
+  window.doSignOut = async function() {
+    await fbSignOut(auth);
+  };
+
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const active = document.querySelector('.view.active')?.id;
+    if (active === 'view-signin')   window.signIn();
+    if (active === 'view-request')  window.requestAccess();
+  });
+</script>
+
+</body>
+</html>
