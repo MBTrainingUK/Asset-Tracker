@@ -754,6 +754,7 @@
       try {
         const snap = await getDocs(collection(db, 'tenants'));
         const tenants = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        allTenants = tenants;
         if (tenants.length <= 1) return;
         const sel = document.getElementById('tenant-select');
         sel.innerHTML = '';
@@ -930,6 +931,7 @@
     let allBookings = [];
     let allAuditLog = [];
     let allAdminUsers = [];
+    let allTenants = [];
     let sortCol = 'id';
     let sortDir = 'asc';
     let dangerMode = false;
@@ -1412,6 +1414,10 @@
       const el = document.getElementById('users-container');
       let html = '';
 
+      const tenantOptions = allTenants.map(t =>
+        `<option value="${t.id}">${t.name || t.id}</option>`
+      ).join('');
+
       html += `<div class="table-header"><span class="table-title">⏳ Pending Requests</span></div>`;
       if (pending.length === 0) {
         html += '<div class="no-results" style="padding:20px 24px;">No pending requests.</div>';
@@ -1421,7 +1427,11 @@
           const ts = u.requestedAt?.toDate ? u.requestedAt.toDate().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : '—';
           html += `<tr>
             <td>${u.name || '—'}</td><td>${u.email}</td><td class="date-cell">${ts}</td>
-            <td><div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <td><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+              <select id="dept-pending-${u._id}" style="padding:5px 8px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:0.82rem;color:#1a1a2e;background:#fafafa;">
+                <option value="">— Department —</option>
+                ${tenantOptions}
+              </select>
               <button class="btn-inline-return" onclick="approveUser('${u._id}', 'member', this)">✅ Member</button>
               <button style="padding:5px 12px;background:#e0e7ff;color:#3730a3;border:1.5px solid #a5b4fc;border-radius:8px;font-size:0.82rem;font-weight:600;cursor:pointer;" onclick="approveUser('${u._id}', 'admin', this)">⚡ Admin</button>
               <button style="padding:5px 12px;background:#fee2e2;color:#991b1b;border:1.5px solid #fca5a5;border-radius:8px;font-size:0.82rem;font-weight:600;cursor:pointer;" onclick="declineUser('${u._id}', this)">✕ Decline</button>
@@ -1436,7 +1446,7 @@
       if (approved.length === 0) {
         html += '<div class="no-results" style="padding:20px 24px;">No approved admins.</div>';
       } else {
-        html += `<table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Approved</th><th></th></tr></thead><tbody>`;
+        html += `<table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Department</th><th>Approved</th><th></th></tr></thead><tbody>`;
         approved.forEach(u => {
           const ts = u.approvedAt?.toDate ? u.approvedAt.toDate().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' }) : '—';
           const isSelf = u._id === auth.currentUser?.uid;
@@ -1447,8 +1457,20 @@
           const changeRoleBtn = role === 'admin'
             ? `<button style="padding:5px 10px;background:#f0fdf4;color:#166534;border:1.5px solid #bbf7d0;border-radius:8px;font-size:0.78rem;font-weight:600;cursor:pointer;" onclick="changeRole('${u._id}', 'member', this)">→ Member</button>`
             : `<button style="padding:5px 10px;background:#e0e7ff;color:#3730a3;border:1.5px solid #a5b4fc;border-radius:8px;font-size:0.78rem;font-weight:600;cursor:pointer;" onclick="changeRole('${u._id}', 'admin', this)">→ Admin</button>`;
+          const deptOptions = allTenants.map(t =>
+            `<option value="${t.id}" ${t.id === u.tenantId ? 'selected' : ''}>${t.name || t.id}</option>`
+          ).join('');
+          const deptCell = isSelf
+            ? `<td><span style="font-size:0.82rem;color:#64748b;">${u.tenantName || u.tenantId || '—'}</span></td>`
+            : `<td><div style="display:flex;gap:6px;align-items:center;">
+                <select id="dept-approved-${u._id}" style="padding:4px 8px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:0.82rem;color:#1a1a2e;background:#fafafa;">
+                  <option value="">— None —</option>
+                  ${deptOptions}
+                </select>
+                <button style="padding:4px 10px;background:#f0f9ff;color:#0369a1;border:1.5px solid #bae6fd;border-radius:8px;font-size:0.78rem;font-weight:600;cursor:pointer;" onclick="changeDept('${u._id}', this)">Save</button>
+              </div></td>`;
           html += `<tr>
-            <td>${u.name || '—'}</td><td>${u.email}</td><td>${roleBadge}</td><td class="date-cell">${ts}</td>
+            <td>${u.name || '—'}</td><td>${u.email}</td><td>${roleBadge}</td>${deptCell}<td class="date-cell">${ts}</td>
             <td><div style="display:flex;gap:6px;">
               ${isSelf ? '<span style="font-size:0.8rem;color:#94a3b8;">You</span>' : `
                 ${changeRoleBtn}
@@ -1463,15 +1485,46 @@
     }
 
     window.approveUser = async function (uid, role, btn) {
+      const sel = document.getElementById(`dept-pending-${uid}`);
+      const selectedTenantId = sel ? sel.value : '';
+      const selectedTenant = allTenants.find(t => t.id === selectedTenantId);
+      if (!selectedTenantId) {
+        alert('Please select a department before approving.');
+        return;
+      }
       btn.textContent = '⏳'; btn.disabled = true;
       try {
         await updateDoc(doc(db, 'adminUsers', uid), {
-          status: 'approved', role, approvedAt: serverTimestamp(), approvedBy: auth.currentUser.email
+          status: 'approved', role,
+          tenantId: selectedTenantId,
+          tenantName: selectedTenant?.name || selectedTenantId,
+          approvedAt: serverTimestamp(), approvedBy: auth.currentUser.email
         });
         const u = allAdminUsers.find(u => u._id === uid);
-        if (u) { u.status = 'approved'; u.role = role; u.approvedAt = { toDate: () => new Date() }; }
+        if (u) {
+          u.status = 'approved'; u.role = role;
+          u.tenantId = selectedTenantId;
+          u.tenantName = selectedTenant?.name || selectedTenantId;
+          u.approvedAt = { toDate: () => new Date() };
+        }
         renderUsersTab();
       } catch (err) { btn.textContent = '⏳'; btn.disabled = false; console.error(err); }
+    };
+
+    window.changeDept = async function (uid, btn) {
+      const sel = document.getElementById(`dept-approved-${uid}`);
+      const selectedTenantId = sel ? sel.value : '';
+      const selectedTenant = allTenants.find(t => t.id === selectedTenantId);
+      btn.textContent = '⏳'; btn.disabled = true;
+      try {
+        await updateDoc(doc(db, 'adminUsers', uid), {
+          tenantId: selectedTenantId,
+          tenantName: selectedTenant?.name || selectedTenantId || ''
+        });
+        const u = allAdminUsers.find(u => u._id === uid);
+        if (u) { u.tenantId = selectedTenantId; u.tenantName = selectedTenant?.name || selectedTenantId || ''; }
+        renderUsersTab();
+      } catch (err) { btn.textContent = 'Save'; btn.disabled = false; console.error(err); }
     };
 
     window.changeRole = async function (uid, newRole, btn) {
