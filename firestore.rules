@@ -2,27 +2,74 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isAdmin() {
-      return request.auth != null;
+    // Returns the calling user's adminUsers document data
+    function adminData() {
+      return get(/databases/$(database)/documents/adminUsers/$(request.auth.uid)).data;
     }
 
-    // Assets — auth required for all access, admin-only delete
-    match /assets/{assetId} {
-      allow read: if request.auth != null;
-      allow create: if isAdmin() || (request.auth != null && validAssetWrite(request.resource.data));
-      allow update: if isAdmin() || (request.auth != null && validAssetWrite(request.resource.data));
-      allow delete: if isAdmin();
+    // True if the user is a superAdmin (global access across all tenants)
+    function isSuperAdmin() {
+      return request.auth != null && adminData().superAdmin == true;
     }
 
-    // Bookings — auth required for all access, never delete
-    match /bookings/{bookingId} {
+    // True if the user is an approved admin/member for exactly this tenant
+    function isTenantUser(tenantId) {
+      return request.auth != null
+        && adminData().status == 'approved'
+        && adminData().tenantId == tenantId;
+    }
+
+    // True if the user is an approved admin for this tenant (or superAdmin)
+    function isTenantAdmin(tenantId) {
+      return isSuperAdmin()
+        || (isTenantUser(tenantId) && adminData().role == 'admin');
+    }
+
+    // True if the user can access this tenant at all (superAdmin or assigned tenant member)
+    function canAccessTenant(tenantId) {
+      return isSuperAdmin() || isTenantUser(tenantId);
+    }
+
+    // -------------------------------------------------------------------------
+    // Tenant documents — readable by any authenticated user (needed for switcher)
+    // -------------------------------------------------------------------------
+    match /tenants/{tenantId} {
       allow read: if request.auth != null;
-      allow create: if request.auth != null && validNewBooking(request.resource.data);
-      allow update: if isAdmin() || (request.auth != null && validBookingReturn(request.resource.data, resource.data));
+      allow write: if isSuperAdmin();
+    }
+
+    // -------------------------------------------------------------------------
+    // Tenant-scoped: assets
+    // -------------------------------------------------------------------------
+    match /tenants/{tenantId}/assets/{assetId} {
+      allow read: if canAccessTenant(tenantId);
+      allow create: if isTenantAdmin(tenantId) || (canAccessTenant(tenantId) && validAssetWrite(request.resource.data));
+      allow update: if isTenantAdmin(tenantId) || (canAccessTenant(tenantId) && validAssetWrite(request.resource.data));
+      allow delete: if isTenantAdmin(tenantId);
+    }
+
+    // -------------------------------------------------------------------------
+    // Tenant-scoped: bookings
+    // -------------------------------------------------------------------------
+    match /tenants/{tenantId}/bookings/{bookingId} {
+      allow read: if canAccessTenant(tenantId);
+      allow create: if canAccessTenant(tenantId) && validNewBooking(request.resource.data);
+      allow update: if isTenantAdmin(tenantId) || (canAccessTenant(tenantId) && validBookingReturn(request.resource.data, resource.data));
       allow delete: if false;
     }
 
-    // Admin users — any authenticated user can read/create their own doc; any auth user can update (for approvals)
+    // -------------------------------------------------------------------------
+    // Tenant-scoped: audit log
+    // -------------------------------------------------------------------------
+    match /tenants/{tenantId}/auditLog/{logId} {
+      allow read: if isTenantAdmin(tenantId);
+      allow create: if canAccessTenant(tenantId) && validAuditEntry(request.resource.data);
+      allow update, delete: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Root: adminUsers — global, not per-tenant
+    // -------------------------------------------------------------------------
     match /adminUsers/{userId} {
       allow read: if request.auth != null;
       allow create: if request.auth != null && request.auth.uid == userId;
@@ -30,11 +77,20 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Audit log — admin-only read, any authenticated user can create, no edits
+    // -------------------------------------------------------------------------
+    // Legacy root collections (kept as backup — read-only, admin only)
+    // -------------------------------------------------------------------------
+    match /assets/{assetId} {
+      allow read: if isSuperAdmin();
+      allow write: if false;
+    }
+    match /bookings/{bookingId} {
+      allow read: if isSuperAdmin();
+      allow write: if false;
+    }
     match /auditLog/{logId} {
-      allow read: if isAdmin();
-      allow create: if request.auth != null && validAuditEntry(request.resource.data);
-      allow update, delete: if false;
+      allow read: if isSuperAdmin();
+      allow write: if false;
     }
 
     // Block everything else
@@ -42,6 +98,9 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // -------------------------------------------------------------------------
+    // Validation helpers
+    // -------------------------------------------------------------------------
     function validAssetWrite(data) {
       return data.id is string && data.id.size() > 0 && data.id.size() <= 50
         && data.location is string && data.location.size() > 0 && data.location.size() <= 100

@@ -127,6 +127,48 @@
       font-weight: 500;
     }
 
+    .tenant-switcher {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      background: #eef2ff;
+      border: 1.5px solid #c7d2fe;
+      border-radius: 10px;
+      padding: 6px 12px;
+    }
+    .tenant-switcher label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #4361ee;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      white-space: nowrap;
+      margin-bottom: 0;
+    }
+    .tenant-switcher select {
+      border: none;
+      background: transparent;
+      font-size: 0.88rem;
+      font-weight: 600;
+      color: #1a1a2e;
+      cursor: pointer;
+      padding: 0;
+      margin-bottom: 0;
+    }
+    .tenant-switcher select:focus { outline: none; box-shadow: none; }
+    .tenant-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 12px;
+      background: #eef2ff;
+      border: 1.5px solid #c7d2fe;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: #4361ee;
+      letter-spacing: 0.02em;
+    }
+
     .stats-row {
       display: flex;
       gap: 14px;
@@ -471,12 +513,20 @@
   </div>
 
   <header>
-    <div class="header-brand">
-      <div class="header-icon">📦</div>
-      <h1 id="admin-title" style="cursor:default;user-select:none;">Asset Tracker — Admin</h1>
+    <div class="header-brand" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div class="header-icon">📦</div>
+        <h1 id="admin-title" style="cursor:default;user-select:none;">Asset Tracker — Admin</h1>
+      </div>
+      <span id="tenant-badge" class="tenant-badge" style="display:none;"></span>
+      <div id="tenant-switcher" class="tenant-switcher">
+        <label>Department</label>
+        <select id="tenant-select" onchange="switchTenant(this.value)">
+        </select>
+      </div>
     </div>
     <div class="header-right" style="display:flex;align-items:center;gap:14px;">
-      <a href="index.html">← Scanner</a>
+      <a id="scanner-link" href="index.html">← Scanner</a>
       <button id="btn-signout" onclick="signOut()" style="display:none;width:auto;padding:6px 14px;font-size:0.82rem;background:#f1f5f9;color:#475569;border:1px solid #e2e8f0;">Sign Out</button>
     </div>
   </header>
@@ -680,6 +730,45 @@
     const db = getFirestore(app);
     const auth = getAuth(app);
 
+    // ── Tenant resolution ──────────────────────────────────────────────────
+    let tenantId = new URLSearchParams(window.location.search).get('tenant') || '';
+
+    const aC = (...path) => collection(db, 'tenants', tenantId, ...path);
+    const aD = (...path) => doc(db, 'tenants', tenantId, ...path);
+
+    function updateTenantUI(name) {
+      const badge = document.getElementById('tenant-badge');
+      badge.textContent = name || tenantId;
+      badge.style.display = 'inline-flex';
+      const scannerLink = document.getElementById('scanner-link');
+      if (tenantId) scannerLink.href = `index.html?tenant=${tenantId}`;
+    }
+
+    window.switchTenant = function(newTenantId) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tenant', newTenantId);
+      window.location.href = url.toString();
+    };
+
+    async function loadTenantSwitcher(currentUserUid) {
+      try {
+        const snap = await getDocs(collection(db, 'tenants'));
+        const tenants = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        if (tenants.length <= 1) return;
+        const sel = document.getElementById('tenant-select');
+        sel.innerHTML = '';
+        tenants.forEach(t => {
+          const opt = document.createElement('option');
+          opt.value = t.id;
+          opt.textContent = t.name || t.id;
+          if (t.id === tenantId) opt.selected = true;
+          sel.appendChild(opt);
+        });
+        document.getElementById('tenant-badge').style.display = 'none';
+        document.getElementById('tenant-switcher').style.display = 'flex';
+      } catch(e) { console.error('loadTenantSwitcher:', e); }
+    }
+
     window.showAuthView = function showAuthView(view) {
       document.getElementById('auth-box-inner').style.display = 'block';
       ['signin', 'request', 'pending', 'declined', 'limited'].forEach(v => {
@@ -768,7 +857,6 @@
       if (user) {
         const adminDoc = await getDoc(doc(db, 'adminUsers', user.uid));
         if (!adminDoc.exists()) {
-          // No admin record — not authorised, sign out and prompt to request access
           await fbSignOut(auth);
           overlay.classList.add('visible');
           showAuthView('signin');
@@ -776,11 +864,50 @@
           authErr.style.color = '#e63946';
           authErr.textContent = 'You don\'t have admin access. Use "Request it here" to apply.';
         } else {
-          const { status, role } = adminDoc.data();
-          if (status === 'approved' && (!role || role === 'admin')) {
+          const data = adminDoc.data();
+          const { status, role } = data;
+
+          if (data.superAdmin === true) {
+            // Superadmin — can access any tenant
             overlay.classList.remove('visible');
             signoutBtn.style.display = 'block';
+            // If no tenant in URL, redirect to first available tenant
+            if (!tenantId) {
+              const tenantsSnap = await getDocs(collection(db, 'tenants'));
+              if (!tenantsSnap.empty) {
+                const firstTenant = tenantsSnap.docs[0].id;
+                const url = new URL(window.location.href);
+                url.searchParams.set('tenant', firstTenant);
+                window.location.replace(url.toString());
+                return;
+              }
+            }
+            await loadTenantSwitcher(user.uid);
             loadAssets();
+
+          } else if (status === 'approved' && (!role || role === 'admin')) {
+            // Regular admin — must have a tenantId assigned
+            const userTenantId = data.tenantId || '';
+            // If no tenant in URL, auto-route to their assigned tenant
+            if (!tenantId && userTenantId) {
+              const url = new URL(window.location.href);
+              url.searchParams.set('tenant', userTenantId);
+              window.location.replace(url.toString());
+              return;
+            }
+            // Block access to a tenant they're not assigned to
+            if (tenantId && userTenantId && tenantId !== userTenantId) {
+              await fbSignOut(auth);
+              overlay.classList.add('visible');
+              showAuthView('signin');
+              document.getElementById('auth-error').textContent = 'You don\'t have access to this department.';
+              return;
+            }
+            overlay.classList.remove('visible');
+            signoutBtn.style.display = 'block';
+            updateTenantUI(data.tenantName || tenantId);
+            loadAssets();
+
           } else if (status === 'approved' && role === 'member') {
             overlay.classList.add('visible');
             signoutBtn.style.display = 'none';
@@ -809,7 +936,7 @@
 
     async function loadAssets() {
       try {
-        const snap = await getDocs(collection(db, 'assets'));
+        const snap = await getDocs(aC('assets'));
         const all = snap.docs.map(d => ({ ...d.data(), _id: d.id }));
         allAssets = all.filter(a => !a.deleted);
         deletedAssets = all.filter(a => a.deleted);
@@ -1019,15 +1146,15 @@
       btn.textContent = '⏳ Saving…';
       btn.disabled = true;
       try {
-        await updateDoc(doc(db, 'bookings', bookingId), {
+        await updateDoc(aD('bookings', bookingId), {
           returnedAt: serverTimestamp()
         });
-        await updateDoc(doc(db, 'assets', assetId), {
+        await updateDoc(aD('assets', assetId), {
           status: 'in',
           currentBookingId: null,
           updatedAt: serverTimestamp()
         });
-        await addDoc(collection(db, 'auditLog'), {
+        await addDoc(aC('auditLog'), {
           action: 'asset_returned',
           assetId,
           performedBy: auth.currentUser.email,
@@ -1051,7 +1178,7 @@
 
     async function loadBookings() {
       try {
-        const snap = await getDocs(collection(db, 'bookings'));
+        const snap = await getDocs(aC('bookings'));
         allBookings = snap.docs.map(d => ({ ...d.data(), _id: d.id }))
           .sort((a, b) => (b.bookedAt?.seconds || 0) - (a.bookedAt?.seconds || 0));
         renderBookings();
@@ -1101,7 +1228,7 @@
 
     window.exportBookingsCSV = async function () {
       try {
-        const snap = await getDocs(collection(db, 'bookings'));
+        const snap = await getDocs(aC('bookings'));
         const bookings = snap.docs.map(d => ({ ...d.data(), _id: d.id }))
           .sort((a, b) => (b.bookedAt?.seconds || 0) - (a.bookedAt?.seconds || 0));
         const rows = [['Asset ID', 'Taken By', 'Destination', 'Notes', 'Booked Out', 'Returned']];
@@ -1143,11 +1270,11 @@
       btn.textContent = '⏳';
       btn.disabled = true;
       try {
-        await updateDoc(doc(db, 'assets', assetId), {
+        await updateDoc(aD('assets', assetId), {
           deleted: true,
           deletedAt: serverTimestamp()
         });
-        await addDoc(collection(db, 'auditLog'), {
+        await addDoc(aC('auditLog'), {
           action: 'asset_deleted',
           assetId,
           performedBy: auth.currentUser.email,
@@ -1172,11 +1299,11 @@
       btn.textContent = '⏳';
       btn.disabled = true;
       try {
-        await updateDoc(doc(db, 'assets', assetId), {
+        await updateDoc(aD('assets', assetId), {
           deleted: deleteField(),
           deletedAt: deleteField()
         });
-        await addDoc(collection(db, 'auditLog'), {
+        await addDoc(aC('auditLog'), {
           action: 'asset_restored',
           assetId,
           performedBy: auth.currentUser.email,
@@ -1204,8 +1331,8 @@
       btn.textContent = '⏳';
       btn.disabled = true;
       try {
-        await deleteDoc(doc(db, 'assets', assetId));
-        await addDoc(collection(db, 'auditLog'), {
+        await deleteDoc(aD('assets', assetId));
+        await addDoc(aC('auditLog'), {
           action: 'asset_purged',
           assetId,
           performedBy: auth.currentUser.email,
@@ -1223,7 +1350,7 @@
 
     async function loadAuditLog() {
       try {
-        const snap = await getDocs(collection(db, 'auditLog'));
+        const snap = await getDocs(aC('auditLog'));
         allAuditLog = snap.docs.map(d => ({ ...d.data(), _id: d.id }))
           .sort((a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
         renderAuditLog();
@@ -1479,8 +1606,8 @@
       statusEl.textContent = 'Exporting…';
       try {
         const [assetsSnap, bookingsSnap] = await Promise.all([
-          getDocs(collection(db, 'assets')),
-          getDocs(collection(db, 'bookings'))
+          getDocs(aC('assets')),
+          getDocs(aC('bookings'))
         ]);
         const data = {
           exportedAt: new Date().toISOString(),
@@ -1531,13 +1658,13 @@
         let count = 0;
         for (const asset of data.assets) {
           const { _id, ...fields } = asset;
-          await setDoc(doc(db, 'assets', _id), fields);
+          await setDoc(aD('assets', _id), fields);
           count++;
           statusEl.textContent = `Importing… (${count}/${data.assets.length + data.bookings.length})`;
         }
         for (const booking of data.bookings) {
           const { _id, ...fields } = booking;
-          await setDoc(doc(db, 'bookings', _id), fields);
+          await setDoc(aD('bookings', _id), fields);
           count++;
           statusEl.textContent = `Importing… (${count}/${data.assets.length + data.bookings.length})`;
         }

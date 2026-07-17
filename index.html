@@ -561,7 +561,7 @@
       <h1>Asset Tracker</h1>
     </div>
     <div style="display:flex;align-items:center;gap:14px;">
-      <a href="admin.html">Admin →</a>
+      <a id="admin-link" href="admin.html">Admin →</a>
       <button id="btn-scanner-signout" onclick="scannerSignOut()" style="display:none;padding:6px 14px;font-size:0.82rem;background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.8);border:1px solid rgba(255,255,255,0.25);border-radius:8px;font-family:'Inter',sans-serif;font-weight:500;cursor:pointer;width:auto;">Sign Out</button>
     </div>
   </header>
@@ -824,6 +824,18 @@
     const db = getFirestore(app);
     const auth = getAuth(app);
 
+    // ── Tenant resolution ──────────────────────────────────────────────────
+    const tenantId = new URLSearchParams(window.location.search).get('tenant') || '';
+
+    // Shorthand helpers so every query uses the right subcollection path
+    const aC = (...path) => collection(db, 'tenants', tenantId, ...path);
+    const aD = (...path) => doc(db, 'tenants', tenantId, ...path);
+
+    // Keep the Admin link in sync with the current tenant
+    if (tenantId) {
+      document.getElementById('admin-link').href = `admin.html?tenant=${tenantId}`;
+    }
+
     window.showScannerAuthView = function (view) {
       document.getElementById('scanner-auth-box-inner').style.display = 'block';
       ['signin', 'request', 'pending', 'declined'].forEach(v => {
@@ -944,7 +956,7 @@
     async function loadLocations() {
       if (locationsLoaded) return;
       try {
-        const snap = await getDocs(collection(db, 'assets'));
+        const snap = await getDocs(aC('assets'));
         const locs = new Set();
         snap.docs.forEach(d => { if (d.data().location) locs.add(d.data().location); });
         knownLocations = [...locs].sort();
@@ -1054,7 +1066,7 @@
       statusEl.innerHTML = '<span class="spinner"></span> Looking up…';
 
       try {
-        const assetRef = doc(db, 'assets', raw);
+        const assetRef = aD('assets', raw);
         const snap = await getDoc(assetRef);
 
         if (snap.exists() && !snap.data().deleted) {
@@ -1079,7 +1091,7 @@
           let boxInfo = null;
           if (data.boxId) {
             try {
-              const boxSnap = await getDoc(doc(db, 'assets', data.boxId));
+              const boxSnap = await getDoc(aD('assets', data.boxId));
               if (boxSnap.exists() && !boxSnap.data().deleted) {
                 boxInfo = { id: data.boxId, ...boxSnap.data() };
               }
@@ -1227,7 +1239,7 @@
       statusEl.className = '';
 
       try {
-        await setDoc(doc(db, 'assets', currentId), {
+        await setDoc(aD('assets', currentId), {
           id: currentId,
           location,
           description,
@@ -1240,7 +1252,7 @@
         statusEl.className = 'msg-success';
 
         if (!isNewAsset) {
-          await addDoc(collection(db, 'auditLog'), {
+          await addDoc(aC('auditLog'), {
             action: 'asset_edited',
             assetId: currentId,
             performedBy: auth.currentUser.email,
@@ -1281,7 +1293,7 @@
 
     async function loadActiveBooking(bookingId) {
       try {
-        const bSnap = await getDoc(doc(db, 'bookings', bookingId));
+        const bSnap = await getDoc(aD('bookings', bookingId));
         if (!bSnap.exists()) return;
         const b = bSnap.data();
         const bookedAt = b.bookedAt?.toDate
@@ -1350,7 +1362,7 @@
       msgEl.style.color = '';
 
       try {
-        const bookingRef = await addDoc(collection(db, 'bookings'), {
+        const bookingRef = await addDoc(aC('bookings'), {
           assetId: currentId,
           bookedBy,
           destination,
@@ -1359,13 +1371,13 @@
           returnedAt: null
         });
 
-        await updateDoc(doc(db, 'assets', currentId), {
+        await updateDoc(aD('assets', currentId), {
           status: 'out',
           currentBookingId: bookingRef.id,
           updatedAt: serverTimestamp()
         });
 
-        await addDoc(collection(db, 'auditLog'), {
+        await addDoc(aC('auditLog'), {
           action: 'asset_booked_out',
           assetId: currentId,
           performedBy: auth.currentUser.email,
@@ -1401,17 +1413,17 @@
       msgEl.style.color = '';
 
       try {
-        await updateDoc(doc(db, 'bookings', currentBookingId), {
+        await updateDoc(aD('bookings', currentBookingId), {
           returnedAt: serverTimestamp()
         });
 
-        await updateDoc(doc(db, 'assets', currentId), {
+        await updateDoc(aD('assets', currentId), {
           status: 'in',
           currentBookingId: null,
           updatedAt: serverTimestamp()
         });
 
-        await addDoc(collection(db, 'auditLog'), {
+        await addDoc(aC('auditLog'), {
           action: 'asset_returned',
           assetId: currentId,
           performedBy: auth.currentUser.email,
@@ -1459,7 +1471,7 @@
       statusEl.innerHTML = '<span class="spinner"></span> Saving…';
       statusEl.className = '';
       try {
-        await setDoc(doc(db, 'assets', currentId), {
+        await setDoc(aD('assets', currentId), {
           id: currentId, type: 'box', name, location, condition,
           untaggedItems: [], updatedAt: serverTimestamp()
         }, { merge: true });
@@ -1522,7 +1534,7 @@
       const el = document.getElementById('box-contents-list');
       el.innerHTML = '<div style="text-align:center;padding:12px;color:#94a3b8;font-size:0.88rem;"><span class="spinner"></span></div>';
       try {
-        const q = query(collection(db, 'assets'), where('boxId', '==', boxId));
+        const q = query(aC('assets'), where('boxId', '==', boxId));
         const snap = await getDocs(q);
         boxContentsAssets = snap.docs.map(d => ({ ...d.data(), _id: d.id })).filter(a => !a.deleted);
         renderBoxContents();
@@ -1608,7 +1620,7 @@
       msgEl.innerHTML = '<span class="spinner"></span> Looking up…';
       msgEl.style.color = '';
       try {
-        const assetSnap = await getDoc(doc(db, 'assets', assetId));
+        const assetSnap = await getDoc(aD('assets', assetId));
         if (!assetSnap.exists() || assetSnap.data().deleted) {
           msgEl.textContent = `Asset ${assetId} not found.`; msgEl.style.color = '#e63946'; return;
         }
@@ -1619,7 +1631,7 @@
         if (assetData.boxId && assetData.boxId !== currentBoxId) {
           msgEl.textContent = `Asset ${assetId} already belongs to box ${assetData.boxId}.`; msgEl.style.color = '#e63946'; return;
         }
-        await updateDoc(doc(db, 'assets', assetId), { boxId: currentBoxId, relationship, updatedAt: serverTimestamp() });
+        await updateDoc(aD('assets', assetId), { boxId: currentBoxId, relationship, updatedAt: serverTimestamp() });
         const existing = boxContentsAssets.find(a => a._id === assetId);
         if (existing) { existing.relationship = relationship; }
         else { boxContentsAssets.push({ ...assetData, _id: assetId, boxId: currentBoxId, relationship }); }
@@ -1685,7 +1697,7 @@
       if (!confirm(`Delete asset ${assetId}?\n\nIt will be marked as deleted and can be restored by an admin.`)) return;
       rfbCloseModal();
       try {
-        await updateDoc(doc(db, 'assets', assetId), {
+        await updateDoc(aD('assets', assetId), {
           deleted: true, deletedAt: serverTimestamp(),
           boxId: deleteField(), relationship: deleteField(), updatedAt: serverTimestamp()
         });
@@ -1705,7 +1717,7 @@
       if (!location || location === '__new__') { errEl.textContent = 'Please select or enter a location.'; return; }
       errEl.textContent = '';
       try {
-        await updateDoc(doc(db, 'assets', assetId), {
+        await updateDoc(aD('assets', assetId), {
           boxId: deleteField(), relationship: deleteField(),
           location, updatedAt: serverTimestamp()
         });
@@ -1743,7 +1755,7 @@
       statusEl.innerHTML = '<span class="spinner"></span> Saving…';
       statusEl.className = '';
       try {
-        await setDoc(doc(db, 'assets', currentBoxId), {
+        await setDoc(aD('assets', currentBoxId), {
           id: currentBoxId, type: 'box', name, location, condition,
           untaggedItems: editingUntaggedItems, updatedAt: serverTimestamp()
         }, { merge: true });
@@ -1857,7 +1869,7 @@
       document.getElementById('urm-step-2').style.display = 'block';
       document.getElementById('urm-error').textContent = '';
       try {
-        const snap = await getDocs(query(collection(db, 'assets'), where('type', '==', 'box')));
+        const snap = await getDocs(query(aC('assets'), where('type', '==', 'box')));
         sel.innerHTML = '<option value="" disabled selected>Select a box…</option>';
         snap.docs.forEach(d => {
           if (d.data().deleted || d.id === currentBoxId) return;
@@ -1889,7 +1901,7 @@
       errEl.textContent = '';
       const item = editingUntaggedItems[_urmIndex];
       try {
-        const targetSnap = await getDoc(doc(db, 'assets', targetBoxId));
+        const targetSnap = await getDoc(aD('assets', targetBoxId));
         if (!targetSnap.exists()) { errEl.textContent = 'Target box not found.'; return; }
         const existing = targetSnap.data().untaggedItems || [];
         const match = existing.find(it => it.name.toLowerCase() === item.name.toLowerCase());
@@ -1903,7 +1915,7 @@
         } else {
           updated = [...existing, { name: item.name, qty: item.qty }];
         }
-        await updateDoc(doc(db, 'assets', targetBoxId), { untaggedItems: updated, updatedAt: serverTimestamp() });
+        await updateDoc(aD('assets', targetBoxId), { untaggedItems: updated, updatedAt: serverTimestamp() });
         editingUntaggedItems.splice(_urmIndex, 1);
         renderUntaggedItemsEdit();
         urmCloseModal();
@@ -1913,7 +1925,7 @@
     // ── Untagged item text search ──
     async function searchUntaggedItems(term) {
       const lowerTerm = term.toLowerCase();
-      const q = query(collection(db, 'assets'), where('type', '==', 'box'));
+      const q = query(aC('assets'), where('type', '==', 'box'));
       const snap = await getDocs(q);
       const results = [];
       snap.docs.forEach(d => {
