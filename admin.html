@@ -1463,8 +1463,10 @@
           const deptOptions = allTenants.map(t =>
             `<option value="${t.id}" ${t.id === u.tenantId ? 'selected' : ''}>${t.name || t.id}</option>`
           ).join('');
-          const deptCell = isSelf
-            ? `<td><span style="font-size:0.82rem;color:#64748b;">${u.tenantName || u.tenantId || '—'}</span></td>`
+          const isSuperAdminUser = u.superAdmin === true;
+          const deptDisplay = allTenants.find(t => t.id === u.tenantId)?.name || u.tenantName || u.tenantId || '—';
+          const deptCell = (isSelf || isSuperAdminUser)
+            ? `<td><span style="font-size:0.82rem;color:#64748b;">${isSuperAdminUser ? 'All departments' : deptDisplay}</span></td>`
             : `<td><div style="display:flex;gap:6px;align-items:center;">
                 <select id="dept-approved-${u._id}" style="padding:4px 8px;border:1.5px solid #e0e0e0;border-radius:8px;font-size:0.82rem;color:#1a1a2e;background:#fafafa;">
                   <option value="">— None —</option>
@@ -1472,10 +1474,11 @@
                 </select>
                 <button style="padding:4px 10px;background:#f0f9ff;color:#0369a1;border:1.5px solid #bae6fd;border-radius:8px;font-size:0.78rem;font-weight:600;cursor:pointer;" onclick="changeDept('${u._id}', this)">Save</button>
               </div></td>`;
+          const superAdminBadge = '<span style="padding:2px 10px;border-radius:12px;font-size:0.75rem;font-weight:600;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;">Super Admin</span>';
           html += `<tr>
-            <td>${u.name || '—'}</td><td>${u.email}</td><td>${roleBadge}</td>${deptCell}<td class="date-cell">${ts}</td>
+            <td>${u.name || '—'}</td><td>${u.email}</td><td>${isSuperAdminUser ? superAdminBadge : roleBadge}</td>${deptCell}<td class="date-cell">${ts}</td>
             <td><div style="display:flex;gap:6px;">
-              ${isSelf ? '<span style="font-size:0.8rem;color:#94a3b8;">You</span>' : `
+              ${(isSelf || isSuperAdminUser) ? `<span style="font-size:0.8rem;color:#94a3b8;">${isSelf ? 'You' : ''}</span>` : `
                 ${changeRoleBtn}
                 <button style="padding:5px 10px;background:#fee2e2;color:#991b1b;border:1.5px solid #fca5a5;border-radius:8px;font-size:0.78rem;font-weight:600;cursor:pointer;" onclick="revokeUser('${u._id}', this)">Revoke</button>
               `}
