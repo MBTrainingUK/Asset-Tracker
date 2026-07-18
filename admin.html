@@ -870,6 +870,7 @@
 
           if (data.superAdmin === true) {
             // Superadmin — can access any tenant
+            currentUserIsSuperAdmin = true;
             overlay.classList.remove('visible');
             signoutBtn.style.display = 'block';
             // If no tenant in URL, redirect to first available tenant
@@ -930,6 +931,7 @@
     let allAuditLog = [];
     let allAdminUsers = [];
     let allTenants = [];
+    let currentUserIsSuperAdmin = false;
     let sortCol = 'id';
     let sortDir = 'asc';
     let dangerMode = false;
@@ -1397,7 +1399,10 @@
     async function loadAdminUsers() {
       try {
         const snap = await getDocs(collection(db, 'adminUsers'));
-        allAdminUsers = snap.docs.map(d => ({ ...d.data(), _id: d.id }));
+        const all = snap.docs.map(d => ({ ...d.data(), _id: d.id }));
+        allAdminUsers = currentUserIsSuperAdmin
+          ? all
+          : all.filter(u => u.tenantId === tenantId || u._id === auth.currentUser?.uid);
         renderUsersTab();
       } catch (err) {
         document.getElementById('users-container').innerHTML =
