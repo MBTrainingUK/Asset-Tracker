@@ -1398,6 +1398,10 @@
 
     async function loadAdminUsers() {
       try {
+        if (allTenants.length === 0) {
+          const tSnap = await getDocs(collection(db, 'tenants'));
+          allTenants = tSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        }
         const snap = await getDocs(collection(db, 'adminUsers'));
         const all = snap.docs.map(d => ({ ...d.data(), _id: d.id }));
         allAdminUsers = currentUserIsSuperAdmin
