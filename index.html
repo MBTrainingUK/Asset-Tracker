@@ -561,6 +561,10 @@
       <h1>Asset Tracker</h1>
     </div>
     <div style="display:flex;align-items:center;gap:14px;">
+      <div id="scanner-tenant-switcher" style="display:none;align-items:center;gap:6px;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);border-radius:8px;padding:4px 10px;">
+        <label style="font-size:0.7rem;font-weight:700;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.05em;margin:0;">Dept</label>
+        <select id="scanner-tenant-select" onchange="switchScannerTenant(this.value)" style="border:none;background:transparent;font-size:0.82rem;font-weight:600;color:white;cursor:pointer;padding:0;"></select>
+      </div>
       <a id="admin-link" href="admin.html">Admin →</a>
       <button id="btn-scanner-signout" onclick="scannerSignOut()" style="display:none;padding:6px 14px;font-size:0.82rem;background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.8);border:1px solid rgba(255,255,255,0.25);border-radius:8px;font-family:'Inter',sans-serif;font-weight:500;cursor:pointer;width:auto;">Sign Out</button>
     </div>
@@ -839,6 +843,13 @@
       document.getElementById('admin-link').href = `admin.html?tenant=${tenantId}`;
     }
 
+    window.switchScannerTenant = function(newTenantId) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tenant', newTenantId);
+      url.searchParams.delete('id');
+      window.location.href = url.toString();
+    };
+
     if (tenantId) applyTenant(tenantId);
 
     window.showScannerAuthView = function (view) {
@@ -940,8 +951,20 @@
             if (data.superAdmin === true) {
               isSuperAdmin = true;
               const tSnap = await getDocs(collection(db, 'tenants'));
-              allTenantIds = tSnap.docs.map(d => d.id);
+              const tenants = tSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+              allTenantIds = tenants.map(t => t.id);
               if (!tenantId && allTenantIds.length) applyTenant(allTenantIds[0]);
+              // Show tenant switcher
+              const sel = document.getElementById('scanner-tenant-select');
+              sel.innerHTML = '';
+              tenants.forEach(t => {
+                const opt = document.createElement('option');
+                opt.value = t.id;
+                opt.textContent = t.name || t.id;
+                if (t.id === tenantId) opt.selected = true;
+                sel.appendChild(opt);
+              });
+              document.getElementById('scanner-tenant-switcher').style.display = 'flex';
             } else if (!tenantId && data.tenantId) {
               applyTenant(data.tenantId);
             }
@@ -1075,21 +1098,7 @@
       statusEl.innerHTML = '<span class="spinner"></span> Looking up…';
 
       try {
-        let snap = await getDoc(aD('assets', raw));
-
-        // SuperAdmin: if not found in current tenant, check all others
-        if (isSuperAdmin && (!snap.exists() || snap.data().deleted)) {
-          for (const tid of allTenantIds) {
-            if (tid === tenantId) continue;
-            const otherRef = doc(db, 'tenants', tid, 'assets', raw);
-            const otherSnap = await getDoc(otherRef);
-            if (otherSnap.exists() && !otherSnap.data().deleted) {
-              applyTenant(tid);
-              snap = otherSnap;
-              break;
-            }
-          }
-        }
+        const snap = await getDoc(aD('assets', raw));
 
         if (snap.exists() && !snap.data().deleted) {
           const data = snap.data();
@@ -1951,20 +1960,17 @@
     // ── Untagged item text search ──
     async function searchUntaggedItems(term) {
       const lowerTerm = term.toLowerCase();
-      const tenantsToSearch = isSuperAdmin ? allTenantIds : [tenantId];
+      const q = query(aC('assets'), where('type', '==', 'box'));
+      const snap = await getDocs(q);
       const results = [];
-      for (const tid of tenantsToSearch) {
-        const q = query(collection(db, 'tenants', tid, 'assets'), where('type', '==', 'box'));
-        const snap = await getDocs(q);
-        snap.docs.forEach(d => {
-          if (d.data().deleted) return;
-          const box = { id: d.id, ...d.data() };
-          const matches = (box.untaggedItems || []).filter(item =>
-            item.name.toLowerCase().includes(lowerTerm)
-          );
-          if (matches.length > 0) results.push({ box, matches, tenantId: tid });
-        });
-      }
+      snap.docs.forEach(d => {
+        if (d.data().deleted) return;
+        const box = { id: d.id, ...d.data() };
+        const matches = (box.untaggedItems || []).filter(item =>
+          item.name.toLowerCase().includes(lowerTerm)
+        );
+        if (matches.length > 0) results.push({ box, matches });
+      });
       return results;
     }
 
