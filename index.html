@@ -825,16 +825,18 @@
     const auth = getAuth(app);
 
     // ── Tenant resolution ──────────────────────────────────────────────────
-    const tenantId = new URLSearchParams(window.location.search).get('tenant') || '';
+    let tenantId = new URLSearchParams(window.location.search).get('tenant') || '';
 
-    // Shorthand helpers so every query uses the right subcollection path
+    // Shorthand helpers — always use current tenantId value
     const aC = (...path) => collection(db, 'tenants', tenantId, ...path);
     const aD = (...path) => doc(db, 'tenants', tenantId, ...path);
 
-    // Keep the Admin link in sync with the current tenant
-    if (tenantId) {
+    function applyTenant(id) {
+      tenantId = id;
       document.getElementById('admin-link').href = `admin.html?tenant=${tenantId}`;
     }
+
+    if (tenantId) applyTenant(tenantId);
 
     window.showScannerAuthView = function (view) {
       document.getElementById('scanner-auth-box-inner').style.display = 'block';
@@ -926,19 +928,24 @@
         const userDoc = await getDoc(doc(db, 'adminUsers', user.uid));
         if (!userDoc.exists()) {
           await fbSignOut(auth);
-          overlay.classList.add('visible');
-          showScannerAuthView('signin');
+          window.location.replace('login.html');
           authReadyResolve(false);
         } else {
-          const { status } = userDoc.data();
+          const data = userDoc.data();
+          const { status } = data;
           if (status === 'approved') {
+            // If no tenant in URL, inject from user profile
+            if (!tenantId) {
+              const userTenant = data.superAdmin === true
+                ? (await getDocs(collection(db, 'tenants'))).docs[0]?.id || ''
+                : data.tenantId || '';
+              if (userTenant) applyTenant(userTenant);
+            }
             overlay.classList.remove('visible');
             signoutBtn.style.display = 'block';
             authReadyResolve(true);
           } else {
-            overlay.classList.add('visible');
-            signoutBtn.style.display = 'none';
-            showScannerAuthView(status === 'pending' ? 'pending' : 'declined');
+            window.location.replace('login.html');
             authReadyResolve(false);
           }
         }
