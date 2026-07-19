@@ -560,13 +560,12 @@
       <div class="header-icon">📦</div>
       <h1>Asset Tracker</h1>
     </div>
-    <div style="display:flex;align-items:center;gap:14px;">
-      <div id="scanner-tenant-switcher" style="display:none;align-items:center;gap:6px;background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.25);border-radius:8px;padding:4px 10px;">
-        <label style="font-size:0.7rem;font-weight:700;color:rgba(255,255,255,0.6);text-transform:uppercase;letter-spacing:0.05em;margin:0;">Dept</label>
-        <select id="scanner-tenant-select" onchange="switchScannerTenant(this.value)" style="border:none;background:transparent;font-size:0.82rem;font-weight:600;color:white;cursor:pointer;padding:0;"></select>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <div id="scanner-tenant-switcher" style="display:none;align-items:center;gap:6px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:8px;padding:5px 10px;">
+        <select id="scanner-tenant-select" onchange="switchScannerTenant(this.value)" style="border:none;background:transparent;font-size:0.82rem;font-weight:600;color:white;cursor:pointer;padding:0;-webkit-appearance:none;appearance:none;padding-right:14px;background-image:url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2210%22 height=%226%22><path d=%22M0 0l5 6 5-6z%22 fill=%22rgba(255,255,255,0.6)%22/></svg>');background-repeat:no-repeat;background-position:right center;"></select>
       </div>
-      <a id="admin-link" href="admin.html">Admin →</a>
-      <button id="btn-scanner-signout" onclick="scannerSignOut()" style="display:none;padding:6px 14px;font-size:0.82rem;background:rgba(255,255,255,0.15);color:rgba(255,255,255,0.8);border:1px solid rgba(255,255,255,0.25);border-radius:8px;font-family:'Inter',sans-serif;font-weight:500;cursor:pointer;width:auto;">Sign Out</button>
+      <a id="admin-link" href="admin.html" style="font-size:0.82rem;">Admin →</a>
+      <button id="btn-scanner-signout" onclick="scannerSignOut()" style="display:none;padding:5px 12px;font-size:0.82rem;background:rgba(255,255,255,0.12);color:rgba(255,255,255,0.8);border:1px solid rgba(255,255,255,0.2);border-radius:8px;font-family:'Inter',sans-serif;font-weight:500;cursor:pointer;width:auto;">Sign Out</button>
     </div>
   </header>
 
