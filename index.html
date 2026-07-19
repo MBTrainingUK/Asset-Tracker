@@ -831,6 +831,9 @@
     const aC = (...path) => collection(db, 'tenants', tenantId, ...path);
     const aD = (...path) => doc(db, 'tenants', tenantId, ...path);
 
+    let isSuperAdmin = false;
+    let allTenantIds = [];
+
     function applyTenant(id) {
       tenantId = id;
       document.getElementById('admin-link').href = `admin.html?tenant=${tenantId}`;
@@ -934,12 +937,13 @@
           const data = userDoc.data();
           const { status } = data;
           if (status === 'approved') {
-            // If no tenant in URL, inject from user profile
-            if (!tenantId) {
-              const userTenant = data.superAdmin === true
-                ? (await getDocs(collection(db, 'tenants'))).docs[0]?.id || ''
-                : data.tenantId || '';
-              if (userTenant) applyTenant(userTenant);
+            if (data.superAdmin === true) {
+              isSuperAdmin = true;
+              const tSnap = await getDocs(collection(db, 'tenants'));
+              allTenantIds = tSnap.docs.map(d => d.id);
+              if (!tenantId && allTenantIds.length) applyTenant(allTenantIds[0]);
+            } else if (!tenantId && data.tenantId) {
+              applyTenant(data.tenantId);
             }
             overlay.classList.remove('visible');
             signoutBtn.style.display = 'block';
@@ -1071,8 +1075,21 @@
       statusEl.innerHTML = '<span class="spinner"></span> Looking up…';
 
       try {
-        const assetRef = aD('assets', raw);
-        const snap = await getDoc(assetRef);
+        let snap = await getDoc(aD('assets', raw));
+
+        // SuperAdmin: if not found in current tenant, check all others
+        if (isSuperAdmin && (!snap.exists() || snap.data().deleted)) {
+          for (const tid of allTenantIds) {
+            if (tid === tenantId) continue;
+            const otherRef = doc(db, 'tenants', tid, 'assets', raw);
+            const otherSnap = await getDoc(otherRef);
+            if (otherSnap.exists() && !otherSnap.data().deleted) {
+              applyTenant(tid);
+              snap = otherSnap;
+              break;
+            }
+          }
+        }
 
         if (snap.exists() && !snap.data().deleted) {
           const data = snap.data();
@@ -1190,7 +1207,11 @@
         }
 
       } catch (err) {
-        statusEl.textContent = 'Error looking up asset. Please try again.';
+        if (!tenantId) {
+          statusEl.textContent = 'No department set. Please log in again via the login page.';
+        } else {
+          statusEl.textContent = 'Error looking up asset. Please try again.';
+        }
         console.error(err);
       }
     };
@@ -1930,17 +1951,20 @@
     // ── Untagged item text search ──
     async function searchUntaggedItems(term) {
       const lowerTerm = term.toLowerCase();
-      const q = query(aC('assets'), where('type', '==', 'box'));
-      const snap = await getDocs(q);
+      const tenantsToSearch = isSuperAdmin ? allTenantIds : [tenantId];
       const results = [];
-      snap.docs.forEach(d => {
-        if (d.data().deleted) return;
-        const box = { id: d.id, ...d.data() };
-        const matches = (box.untaggedItems || []).filter(item =>
-          item.name.toLowerCase().includes(lowerTerm)
-        );
-        if (matches.length > 0) results.push({ box, matches });
-      });
+      for (const tid of tenantsToSearch) {
+        const q = query(collection(db, 'tenants', tid, 'assets'), where('type', '==', 'box'));
+        const snap = await getDocs(q);
+        snap.docs.forEach(d => {
+          if (d.data().deleted) return;
+          const box = { id: d.id, ...d.data() };
+          const matches = (box.untaggedItems || []).filter(item =>
+            item.name.toLowerCase().includes(lowerTerm)
+          );
+          if (matches.length > 0) results.push({ box, matches, tenantId: tid });
+        });
+      }
       return results;
     }
 
